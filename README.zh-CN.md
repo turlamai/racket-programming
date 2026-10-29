@@ -137,7 +137,7 @@
 
 ## 读者反馈
 
-每一页底部都有反馈入口：读者可以反馈整页问题，也可以选中一段文字定点反馈，提交后自动生成带页面信息的 [GitHub issue](https://github.com/turinglambdaai/racket-programming/issues?q=is%3Aissue%20label%3Abook-feedback)（自动打 `book-feedback` 标签）。表单定义在 [.github/ISSUE_TEMPLATE/page-feedback.yml](.github/ISSUE_TEMPLATE/page-feedback.yml)。
+每一页底部都有反馈入口：读者可以反馈整页问题，也可以选中一段文字定点反馈，提交后自动生成带页面信息的 [GitHub issue](https://github.com/turlamai/racket-programming/issues?q=is%3Aissue%20label%3Abook-feedback)（自动打 `book-feedback` 标签）。表单定义在 [.github/ISSUE_TEMPLATE/page-feedback.yml](.github/ISSUE_TEMPLATE/page-feedback.yml)。
 
 ## 技术栈
 
@@ -151,7 +151,7 @@
 ### 1. 克隆
 
 ```bash
-git clone https://github.com/turinglambdaai/racket-programming.git
+git clone https://github.com/turlamai/racket-programming.git
 cd racket-programming
 ```
 

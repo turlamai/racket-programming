@@ -123,7 +123,7 @@ Universal patterns for embedding Racket inside native applications, a complete g
 
 ## Reader Feedback
 
-Every page has a feedback box: readers can report an issue with the page — or with a selected passage — and it lands as a prefilled [GitHub issue](https://github.com/turinglambdaai/racket-programming/issues?q=is%3Aissue%20label%3Abook-feedback) labeled `book-feedback`. The form is defined in [.github/ISSUE_TEMPLATE/page-feedback.yml](.github/ISSUE_TEMPLATE/page-feedback.yml).
+Every page has a feedback box: readers can report an issue with the page — or with a selected passage — and it lands as a prefilled [GitHub issue](https://github.com/turlamai/racket-programming/issues?q=is%3Aissue%20label%3Abook-feedback) labeled `book-feedback`. The form is defined in [.github/ISSUE_TEMPLATE/page-feedback.yml](.github/ISSUE_TEMPLATE/page-feedback.yml).
 
 ## Tech Stack
 
@@ -137,7 +137,7 @@ Every page has a feedback box: readers can report an issue with the page — or 
 ### 1. Clone
 
 ```bash
-git clone https://github.com/turinglambdaai/racket-programming.git
+git clone https://github.com/turlamai/racket-programming.git
 cd racket-programming
 ```
 
