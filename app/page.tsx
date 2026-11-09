@@ -100,6 +100,7 @@ export default function HomePage() {
         <nav aria-label="Reader help" className="text-center text-sm text-sand-600 mt-4 flex flex-wrap justify-center gap-5 px-6">
           <a className="underline underline-offset-4" href="https://github.com/turinglambdaai/racket-programming/blob/master/docs/READING.zh-CN.md">阅读与勘误</a>
           <a lang="en" className="underline underline-offset-4" href="https://github.com/turinglambdaai/racket-programming/blob/master/docs/READING.md">Reader information</a>
+          <a className="underline underline-offset-4" href="https://jrtx.site/">全部产品</a>
         </nav>
       </footer>
     </div>
