@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racket 编程入门 — 代码示例呈现原型（规格对照）</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== 代码示例呈现专属：各形态标本 + 高亮色板对照（推导项已在标注中注明） ==== */
+  .main { flex: 1; min-width: 0; }
+  .col { max-width: 72ch; margin: 0 auto; padding: 56px 40px 72px; }
+  .spec h1 { font-size: 30px; font-weight: 700; margin: 0 0 12px; }
+  .spec .lede { font-size: 15px; color: var(--ink-2); line-height: 1.75; margin-bottom: 40px; }
+  .specimen { margin-bottom: 44px; }
+  .specimen .label { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .specimen .label h2 { font-size: 17px; font-weight: 700; color: var(--ink); }
+  .specimen .note { font-size: 12.5px; color: var(--mute); line-height: 1.7; margin-top: 10px; }
+  .specimen .note b { color: var(--ink-2); font-weight: 600; }
+  .repl .pr { color: #8a857a; user-select: none; }
+  .repl .out { color: var(--code-ink); }
+  .errblock { border-radius: 8px; background: var(--code-bg); overflow: hidden; }
+  .errblock .bar { height: 3px; background: var(--danger); }
+  .errblock pre { padding: 14px 18px; overflow-x: auto; }
+  .errblock code { font-family: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 13px; line-height: 1.7; color: var(--code-ink); display: block; }
+  .errblock .ehead { color: #e07a6a; font-weight: 600; }
+  .palette { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .palette td { border-bottom: 1px solid var(--line-strong); padding: 9px 10px; color: var(--ink-2); }
+  .palette .sw { width: 22px; height: 22px; border-radius: 5px; border: 1px solid var(--line); }
+  .palette .cls { font-family: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 12px; color: var(--accent); }
+  .palette .demo { font-family: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 12.5px; }
+  .proto-note { font-size: 11px; color: var(--faint); text-align: center; margin-top: 32px; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="urlpill"><span class="lock">🔒</span>racket.jrtx.site — 代码呈现规格（原型附页）</div>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="viewport">
+      <aside class="sidebar">
+        <div class="brand"><a href="#">Racket 编程入门</a></div>
+        <a class="slink top" href="#">写在前面</a>
+        <a class="slink top" href="#">问题反馈</a>
+        <button class="spart"><span class="car">▸</span><span class="n">1.</span>起点：编程与计算的本质</button>
+        <button class="spart"><span class="car">▾</span><span class="n">2.</span>基础：用 Racket 写点什么</button>
+        <div class="schapters">
+          <a class="slink" href="#">括号不是负担——Racket 的结构之美</a>
+          <a class="slink active" href="#">告别循环——map、filter 与 fold 的列表处理</a>
+        </div>
+        <button class="spart"><span class="car">▸</span><span class="n">3.</span>函数式：不动状态的计算</button>
+        <button class="spart"><span class="car">▸</span><span class="n">4.</span>命令式与状态</button>
+        <button class="spart"><span class="car">▸</span><span class="n">5.</span>对象与界面</button>
+        <button class="spart"><span class="car">▸</span><span class="n">6.</span>语言设计与计算模型</button>
+        <button class="spart"><span class="car">▸</span><span class="n">7.</span>走向生产：工程化与实战</button>
+        <button class="spart"><span class="car">▸</span>附录</button>
+      </aside>
+      <main class="main">
+        <div class="col spec">
+          <h1>代码示例呈现</h1>
+          <p class="lede">代码块是本书的核心资产。双主题同为深底高亮（见 DESIGN.md 不变式 3）；复制、REPL 提示与错误标识为推导新增，标注如下。</p>
+          <!-- A 定义块 -->
+          <section class="specimen">
+            <div class="label"><h2>A · 定义块（默认态）</h2><span class="chip">现行</span></div>
+            <div class="codeblock">
+              <div class="cbhead"><span class="lang">racket</span><span class="sp"></span><span class="copybtn">复制</span></div>
+<pre><code><span class="hljs-comment">;; 三个高阶函数覆盖九成列表处理</span>
+(<span class="hljs-keyword">define</span> <span class="hljs-name">squares</span>
+  (<span class="hljs-title">map</span> (<span class="hljs-keyword">λ</span> (x) (<span class="hljs-operator">*</span> x x)) (<span class="hljs-title">range</span> <span class="hljs-number">1</span> <span class="hljs-number">6</span>)))   <span class="hljs-comment">;; '(1 4 9 16 25)</span>
+(<span class="hljs-keyword">define</span> <span class="hljs-name">evens</span>
+  (<span class="hljs-title">filter</span> <span class="hljs-name">even?</span> (<span class="hljs-title">range</span> <span class="hljs-number">0</span> <span class="hljs-number">10</span>)))        <span class="hljs-comment">;; '(0 2 4 6 8)</span>
+(<span class="hljs-keyword">define</span> <span class="hljs-name">total</span>
+  (<span class="hljs-title">foldl</span> <span class="hljs-operator">+</span> <span class="hljs-number">0</span> squares))               <span class="hljs-comment">;; 55</span></code></pre>
+            </div>
+            <p class="note"><b>输出注释惯例：</b>结果写在 <code>;;</code> 注释里，灰色斜体，与代码正文区分——沿用现行内容写法。</p>
+          </section>
+          <!-- B 复制成功态 -->
+          <section class="specimen">
+            <div class="label"><h2>B · 复制成功态</h2><span class="chip">推导</span></div>
+            <div class="codeblock">
+              <div class="cbhead"><span class="lang">racket</span><span class="sp"></span><span class="copybtn ok">✓ 已复制</span></div>
+<pre><code>(<span class="hljs-title">foldl</span> <span class="hljs-operator">+</span> <span class="hljs-number">0</span> (<span class="hljs-title">map</span> (<span class="hljs-keyword">λ</span> (x) (<span class="hljs-operator">*</span> x x)) (<span class="hljs-title">range</span> <span class="hljs-number">1</span> <span class="hljs-number">6</span>)))</code></pre>
+            </div>
+            <p class="note"><b>反馈及时：</b>点击复制后按钮变「✓ 已复制」（--ok 色），约 1.5s 后回落为「复制」，不弹遮挡式提示。</p>
+          </section>
+          <!-- C REPL 交互块 -->
+          <section class="specimen">
+            <div class="label"><h2>C · REPL 交互块</h2><span class="chip">推导</span></div>
+            <div class="codeblock repl">
+              <div class="cbhead"><span class="lang">repl</span><span class="sp"></span><span class="copybtn">复制</span></div>
+<pre><code><span class="pr">&gt; </span><span class="out">(+ 1 2)</span>
+<span class="out">3</span>
+<span class="pr">&gt; </span><span class="out">(map (λ (x) (* x x)) '(1 2 3))</span>
+<span class="out">'(1 4 9)</span></code></pre>
+            </div>
+            <p class="note"><b>输入与结果分层：</b><code>&gt;</code> 提示符用注释灰且不参与选中复制；结果行默认色。语言标签写 <code>repl</code>。</p>
+          </section>
+          <!-- D 错误输出态 -->
+          <section class="specimen">
+            <div class="label"><h2>D · 错误输出</h2><span class="chip">推导</span></div>
+            <div class="errblock">
+              <div class="bar"></div>
+<pre><code><span class="ehead">apply: contract violation</span>
+  expected: list?
+  given:    5</code></pre>
+            </div>
+            <p class="note"><b>防错一致：</b>错误块顶部 3px --danger 条线标识，正文保持常规高亮；不整块染红，避免与代码正文争夺注意力。</p>
+          </section>
+          <!-- E 高亮色板 -->
+          <section class="specimen">
+            <div class="label"><h2>E · 高亮色板（双主题共用）</h2><span class="chip">现行</span></div>
+            <table class="palette">
+              <tr><td><span class="sw" style="background:#E08A67"></span></td><td class="cls">keyword · built_in · symbol</td><td class="demo" style="color:#E08A67">define λ set!</td></tr>
+              <tr><td><span class="sw" style="background:#97B87A"></span></td><td class="cls">string · regexp</td><td class="demo" style="color:#97B87A">"hello"</td></tr>
+              <tr><td><span class="sw" style="background:#B48ED8"></span></td><td class="cls">number · literal</td><td class="demo" style="color:#B48ED8">42 #t</td></tr>
+              <tr><td><span class="sw" style="background:#8A857A"></span></td><td class="cls">comment · quote（斜体）</td><td class="demo" style="color:#8A857A;font-style:italic">;; 8 —— add3 随身带着 n</td></tr>
+              <tr><td><span class="sw" style="background:#7AADD3"></span></td><td class="cls">title · name</td><td class="demo" style="color:#7AADD3">make-adder</td></tr>
+              <tr><td><span class="sw" style="background:#63B0B0"></span></td><td class="cls">type · class</td><td class="demo" style="color:#63B0B0">list?</td></tr>
+              <tr><td><span class="sw" style="background:#D9A967"></span></td><td class="cls">attr · variable</td><td class="demo" style="color:#D9A967">count</td></tr>
+              <tr><td><span class="sw" style="background:#C7C2B8"></span></td><td class="cls">operator · punctuation</td><td class="demo" style="color:#C7C2B8">(+ …)</td></tr>
+            </table>
+          </section>
+          <p class="proto-note">原型 v0.1 · 按 ◐ 切换亮暗 · 标「推导」的形态为契约新增，实现前以此页为准</p>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+  </script>
+</body>
+</html>

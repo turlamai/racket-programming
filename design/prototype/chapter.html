@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racket 编程入门 — 章节阅读原型（长文排版 + 代码块）</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== 章节阅读页专属：Prose 长文排版 + 反馈盒 + 章节导航 ==== */
+  .main { flex: 1; min-width: 0; }
+  .col { max-width: 72ch; margin: 0 auto; padding: 56px 40px 72px; }
+  .eyebrow-row { padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 30px; }
+  /* 长文排版（对照 globals.css .prose，与实现 1:1） */
+  .prose { color: var(--ink-2); line-height: 1.8; font-size: 16px; }
+  .prose h1 { font-size: 36px; line-height: 1.25; color: var(--ink); margin: 0 0 24px; letter-spacing: -.01em; }
+  .prose h2 { font-size: 28px; line-height: 1.25; color: var(--ink); margin: 40px 0 16px; }
+  .prose h3 { font-size: 21.6px; line-height: 1.25; color: var(--ink); margin: 32px 0 12px; }
+  .prose p { margin: 20px 0; }
+  .prose strong { color: var(--ink); font-weight: 700; }
+  .prose a { color: var(--accent-strong); text-decoration: underline; text-underline-offset: .15em; }
+  .prose ul { margin: 20px 0; padding-left: 24px; list-style: disc; }
+  .prose li { margin: 5.6px 0; }
+  .prose blockquote { border-left: 3px solid var(--accent-soft); padding-left: 16px; color: var(--mute); font-style: italic; margin: 20px 0; }
+  .prose :not(pre) > code {
+    background: var(--raised); color: var(--accent); padding: .15em .375em; border-radius: 4px;
+    font-size: .875em; font-family: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace;
+  }
+  .prose .codeblock { margin: 20px 0; }
+  /* 反馈盒（对照 components/PageFeedback.tsx） */
+  .feedback { margin-top: 64px; border: 1px solid var(--line); background: var(--raised); border-radius: 8px; padding: 20px 24px; }
+  .feedback .q { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .feedback .hint { font-size: 13.5px; color: var(--ink-2); margin-top: 4px; line-height: 1.6; }
+  .feedback .acts { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 12px; }
+  .feedback .acts .btn { background: var(--surface); }
+  .feedback .links { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12px; display: flex; flex-wrap: wrap; gap: 16px; }
+  .feedback .links a { color: var(--faint); text-decoration: none; }
+  .feedback .links a:hover { color: var(--ink); text-decoration: underline; }
+  /* 章节间导航（对照 components/ChapterNav.tsx） */
+  .chapnav { margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 16px; }
+  .chapnav a { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--faint); text-decoration: none; min-width: 0; }
+  .chapnav a:hover { color: var(--accent); }
+  .chapnav a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chapnav .dir { font-size: 11px; color: var(--faint); display: block; }
+  .proto-note { font-size: 11px; color: var(--faint); text-align: center; margin-top: 40px; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="urlpill"><span class="lock">🔒</span>racket.jrtx.site/book/part-2/chapter/10</div>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="viewport">
+      <aside class="sidebar">
+        <div class="brand"><a href="#">Racket 编程入门</a></div>
+        <a class="slink top" href="#">写在前面</a>
+        <a class="slink top" href="#">问题反馈</a>
+        <button class="spart"><span class="car">▸</span><span class="n">1.</span>起点：编程与计算的本质</button>
+        <button class="spart"><span class="car">▾</span><span class="n">2.</span>基础：用 Racket 写点什么</button>
+        <div class="schapters">
+          <a class="slink" href="#">括号不是负担——Racket 的结构之美</a>
+          <a class="slink" href="#">Racket 的数据——原子与复合</a>
+          <a class="slink" href="#">列表——Racket 的主力数据结构</a>
+          <a class="slink" href="#">结构体——给数据一个明确的形状</a>
+          <a class="slink active" href="#">函数与闭包——Racket 里动作如何成为值</a>
+          <a class="slink" href="#">符号表达式——Lisp 元编程的根基</a>
+          <a class="slink" href="#">从嵌套到管道——Racket 函数组合的两种方向</a>
+          <a class="slink" href="#">告别循环——map、filter 与 fold 的列表处理</a>
+        </div>
+        <button class="spart"><span class="car">▸</span><span class="n">3.</span>函数式：不动状态的计算</button>
+        <button class="spart"><span class="car">▸</span><span class="n">4.</span>命令式与状态</button>
+        <button class="spart"><span class="car">▸</span><span class="n">5.</span>对象与界面</button>
+        <button class="spart"><span class="car">▸</span><span class="n">6.</span>语言设计与计算模型</button>
+        <button class="spart"><span class="car">▸</span><span class="n">7.</span>走向生产：工程化与实战</button>
+        <button class="spart"><span class="car">▸</span>附录</button>
+      </aside>
+      <main class="main">
+        <div class="col">
+          <div class="eyebrow-row"><p class="eyebrow">第 2 部分 · 基础：用 Racket 写点什么</p></div>
+          <article class="prose">
+            <h1>函数与闭包——Racket 里动作如何成为值</h1>
+            <blockquote>在 Racket 里，函数和数字、字符串一样是一个值——能存进变量、塞进列表、传来传去。而让这一切成立的，是闭包：函数随身带着它出生时的环境。</blockquote>
+            <p>你定义过函数，也调用过函数。但你有没有想过：一个「动作」本身，能不能像数字 <code>42</code>、字符串 <code>"hello"</code> 那样，成为一个可以传递、可以存储的值？</p>
+            <p>如果动作也是值，函数就不再是程序里那个特殊的成分，而是和数据平起平坐的东西。<strong>而是「动作也是值」这个想法的直接结果。</strong></p>
+            <h2>lambda：制造动作的表达式</h2>
+            <p>Racket 用 <code>lambda</code> 表达式来构造函数。求值一个 <code>lambda</code>，得到的不是一个数，而是一个「待执行的动作」——和数字、字符串一样，是某种值：</p>
+            <div class="codeblock">
+              <div class="cbhead"><span class="lang">racket</span><span class="sp"></span><span class="copybtn">复制</span></div>
+<pre><code><span class="hljs-comment">;; lambda 造出一个动作，define 给它一个名字</span>
+(<span class="hljs-keyword">define</span> (<span class="hljs-title">make-adder</span> <span class="hljs-name">n</span>)
+  (<span class="hljs-keyword">lambda</span> (<span class="hljs-name">x</span>) (<span class="hljs-operator">+</span> x n)))
+
+(<span class="hljs-keyword">define</span> <span class="hljs-name">add3</span> (make-adder <span class="hljs-number">3</span>))
+(add3 <span class="hljs-number">5</span>)  <span class="hljs-comment">;; 8 —— add3 随身带着出生时的 n</span></code></pre>
+            </div>
+            <p>既然是值，它就能存进变量、塞进列表、从函数里返回、当作参数传给另一个函数。函数成为「一等公民」，不是谁来恩赐的特性。</p>
+            <h2>闭包：函数带着出生时的环境</h2>
+            <p><code>lambda</code> 被求值时，会创建一个新环境，记着自己的参数；同时，它还会把定义处能看到的变量一并「捕获」进来。这就是闭包。</p>
+            <ul>
+              <li><strong>词法作用域</strong>：一个名字指向哪个绑定，由它书写的位置决定，不依赖日后在哪里被调用。</li>
+              <li><strong>环境随函数走</strong>：函数被传来传去，它捕获的环境跟着它走。</li>
+              <li><strong>每次求值都是新环境</strong>：调用两次 <code>make-adder</code>，得到两个互不相干的闭包。</li>
+            </ul>
+            <blockquote>下一章我们把这套想法推到底：符号表达式——当代码本身成为数据。</blockquote>
+          </article>
+          <!-- 勘误反馈盒：每页常驻，位于阅读流之外 -->
+          <div class="feedback">
+            <p class="q">这一页读下来还顺利吗？</p>
+            <p class="hint">发现错误、没讲清楚、代码跑不起来——都欢迎告诉我们，这本书会持续修订。</p>
+            <div class="acts">
+              <button class="btn">👍 有帮助</button>
+              <button class="btn primary">⚑ 反馈问题或建议</button>
+            </div>
+            <div class="links">
+              <a href="#">在 GitHub 上编辑本章</a>
+              <a href="#">查看读者的反馈</a>
+            </div>
+          </div>
+          <!-- 章节间导航：上一章 / 下一章，位置固定 -->
+          <nav class="chapnav" aria-label="章节间导航">
+            <a href="#"><span><span class="dir">← 上一章</span>结构体——给数据一个明确的形状</span></a>
+            <a href="#"><span style="text-align:right"><span class="dir">下一章 →</span>符号表达式——Lisp 元编程的根基</span></a>
+          </nav>
+          <p class="proto-note">原型 v0.1 · 按 ◐ 切换亮暗</p>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+  </script>
+</body>
+</html>

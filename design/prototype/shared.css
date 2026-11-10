@@ -1,0 +1,125 @@
+/* ==== Racket Programming 原型共享壳层 — tokens 与组件，见 design/DESIGN.md ==== */
+:root {
+  --bg: #faf9f6; --surface: #ffffff; --raised: #f5f3ee;
+  --line: #ebe8e0; --line-strong: #e0dcd2;
+  --ink: #2a2820; --ink-2: #4a4740; --mute: #878278; --faint: #a39e93;
+  --accent: #c4683f; --accent-strong: #a8532d; --accent-soft: #fff4ee;
+  --code-bg: #2a2820; --code-ink: #f5f3ee;
+  --ok: #3e7d4e; --danger: #b3423a;
+}
+.dark {
+  --bg: #1c1a16; --surface: #24221d; --raised: #2c2a24;
+  --line: #35322b; --line-strong: #3f3b33;
+  --ink: #edeae3; --ink-2: #c9c3b6; --mute: #9a9485; --faint: #7c766a;
+  --accent: #e08a67; --accent-strong: #ffa98c; --accent-soft: #382a20;
+  --code-bg: #14120e; --code-ink: #edeae3;
+  --ok: #7fb88a; --danger: #e07a6a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  min-height: 100vh; display: grid; place-items: center; padding: 40px 24px;
+  background: radial-gradient(1200px 800px at 20% 0%, #efece6, #e4e0d8 60%, #d9d4ca);
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased; color: var(--ink);
+}
+/* ---- 浏览器壳 ---- */
+.window {
+  position: relative; width: 1240px; max-width: 100%; height: 780px; border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--ink);
+  box-shadow: 0 1px 2px rgba(31,29,26,.10), 0 12px 32px rgba(31,29,26,.18), 0 32px 80px rgba(31,29,26,.22);
+  transition: background .15s ease, color .15s ease;
+}
+.chrome {
+  height: 44px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 14px;
+  background: var(--surface); border-bottom: 1px solid var(--line);
+}
+.lights { display: flex; gap: 8px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; }
+.lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.urlpill {
+  flex: 1; max-width: 460px; height: 26px; margin: 0 auto; display: flex; align-items: center; gap: 8px;
+  background: var(--raised); border: 1px solid var(--line); border-radius: 6px;
+  padding: 0 10px; font-size: 12.5px; color: var(--mute);
+}
+.urlpill .lock { opacity: .7; }
+.iconbtn {
+  width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line); background: var(--raised);
+  color: var(--mute); display: grid; place-items: center; cursor: pointer; font-size: 13px;
+}
+.viewport { flex: 1; overflow-y: auto; min-height: 0; display: flex; }
+.viewport::-webkit-scrollbar { width: 5px; }
+.viewport::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+/* ---- 通用 ---- */
+.eyebrow { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+.btn {
+  height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; border-radius: 6px;
+  font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  cursor: pointer; text-decoration: none;
+}
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.btn:hover { background: var(--raised); }
+.btn.primary:hover { opacity: .9; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 99px; background: var(--raised); color: var(--mute);
+}
+kbd {
+  font-family: inherit; font-size: 10.5px; color: var(--mute);
+  background: var(--raised); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+}
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+/* ---- 侧栏（卷树） ---- */
+.sidebar {
+  width: 256px; flex: none; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface); border-right: 1px solid var(--line); padding: 16px 12px 20px;
+  overflow-y: auto;
+}
+.sidebar .brand { font-size: 15px; font-weight: 700; padding: 2px 8px 12px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+.sidebar .brand a { color: var(--ink); text-decoration: none; }
+.sidebar .brand a:hover { color: var(--accent); }
+.slink {
+  display: block; padding: 6px 10px; border-radius: 6px; font-size: 13.5px;
+  color: var(--ink-2); text-decoration: none; transition: background .12s ease;
+}
+.slink:hover { background: var(--raised); color: var(--ink); }
+.slink.top { font-weight: 500; color: var(--ink-2); }
+.slink.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.spart {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; border-radius: 6px;
+  font-size: 13.5px; font-weight: 600; color: var(--ink-2); background: none; border: 0;
+  cursor: default; text-align: left; font-family: inherit;
+}
+.spart:hover { background: var(--raised); color: var(--ink); }
+.spart .car { font-size: 10px; color: var(--faint); }
+.spart .n { color: var(--faint); font-weight: 600; }
+.schapters { margin: 2px 0 4px 22px; padding-left: 10px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 1px; }
+.schapters .slink { padding: 4px 8px; font-size: 13px; }
+/* ---- 代码块 ---- */
+.codeblock { border-radius: 8px; background: var(--code-bg); color: var(--code-ink); overflow: hidden; }
+.codeblock .cbhead {
+  display: flex; align-items: center; height: 34px; padding: 0 8px 0 14px;
+  border-bottom: 1px solid rgba(245,243,238,.08); font-size: 11.5px; color: #8a857a;
+}
+.codeblock .cbhead .lang { font-weight: 600; letter-spacing: .06em; }
+.codeblock .cbhead .sp { flex: 1; }
+.copybtn {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 4px;
+  font-size: 11px; font-weight: 600; background: rgba(245,243,238,.07); border: 1px solid rgba(245,243,238,.14);
+  color: #c7c2b8; cursor: pointer; font-family: inherit;
+}
+.copybtn.ok { color: #7fb88a; border-color: rgba(127,184,138,.35); background: rgba(127,184,138,.10); }
+.codeblock pre { padding: 14px 18px; overflow-x: auto; }
+.codeblock code { font-family: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 13px; line-height: 1.7; display: block; }
+/* 语法高亮（双主题共用，见 DESIGN.md） */
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-symbol { color: #E08A67; }
+.hljs-string, .hljs-regexp { color: #97B87A; }
+.hljs-number, .hljs-literal { color: #B48ED8; }
+.hljs-comment, .hljs-quote { color: #8A857A; font-style: italic; }
+.hljs-title, .hljs-name { color: #7AADD3; }
+.hljs-type, .hljs-class { color: #63B0B0; }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable { color: #D9A967; }
+.hljs-section, .hljs-bullet { color: #E08A67; }
+.hljs-meta { color: #A39E93; }
+.hljs-operator, .hljs-punctuation { color: #C7C2B8; }
+.hljs-emphasis { font-style: italic; } .hljs-strong { font-weight: 700; }

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racket 编程入门 — 首页原型（英雄屏）</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== 首页专属：居中英雄区 + 全书结构列表（对照 app/page.tsx） ==== */
+  .page { flex: 1; }
+  .hero { max-width: 48rem; margin: 0 auto; padding: 88px 24px 64px; text-align: center; }
+  .hero h1 { font-size: 56px; font-weight: 700; letter-spacing: -.01em; margin: 18px 0 20px; }
+  .hero .sub { font-size: 18px; color: var(--ink-2); line-height: 1.7; max-width: 36rem; margin: 0 auto 10px; }
+  .hero .note { font-size: 13.5px; color: var(--mute); line-height: 1.7; max-width: 36rem; margin: 0 auto 18px; }
+  .hero .author { font-size: 15px; color: var(--mute); margin-bottom: 32px; }
+  .hero .cta { display: flex; justify-content: center; gap: 14px; }
+  .hero .cta svg { display: block; }
+  .parts { max-width: 48rem; margin: 0 auto; padding: 0 24px 72px; }
+  .parts .rule { border-top: 1px solid var(--line); padding-top: 40px; }
+  .prow {
+    display: flex; align-items: flex-start; gap: 16px; padding: 22px 16px; margin: 0 -16px;
+    border-radius: 8px; text-decoration: none; transition: background .12s ease;
+  }
+  .prow:hover { background: color-mix(in srgb, var(--raised) 55%, transparent); }
+  .prow + .prow { border-top: 1px solid var(--line); }
+  .prow .body { flex: 1; min-width: 0; }
+  .prow h3 { font-size: 19px; font-weight: 600; color: var(--ink); margin: 5px 0 7px; }
+  .prow p { font-size: 13.5px; color: var(--ink-2); line-height: 1.65; }
+  .prow .count { flex: none; margin-top: 4px; }
+  .prow .arrow { flex: none; margin-top: 6px; color: var(--faint); transition: color .12s ease, transform .12s ease; }
+  .prow:hover .arrow { color: var(--accent); transform: translateX(2px); }
+  .foot { border-top: 1px solid var(--line); padding: 36px 24px; }
+  .foot .license { text-align: center; font-size: 12px; color: var(--faint); }
+  .foot nav { margin-top: 14px; display: flex; justify-content: center; flex-wrap: wrap; gap: 20px; font-size: 13px; }
+  .foot nav a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; }
+  .foot nav a:hover { color: var(--accent); }
+  .proto-note { text-align: center; font-size: 11px; color: var(--faint); padding-bottom: 16px; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="urlpill"><span class="lock">🔒</span>racket.jrtx.site</div>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="viewport">
+      <div class="page">
+        <!-- 英雄区 -->
+        <header class="hero">
+          <p class="eyebrow">An Online Book</p>
+          <h1>Racket 编程入门</h1>
+          <p class="sub">从零基础到独立开发应用，全面掌握 Racket 编程。</p>
+          <p class="note">免费中文在线书，无需注册。按章节练习，遇到问题可通过页面反馈提交勘误。<span lang="en">A free online book in Chinese.</span></p>
+          <p class="author">吉人 著</p>
+          <div class="cta">
+            <a class="btn primary" href="#">开始阅读
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+            <a class="btn" href="#">Racket 官网</a>
+          </div>
+        </header>
+        <!-- 全书结构：前言 + 七卷 + 附录 -->
+        <section class="parts">
+          <div class="rule">
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">Preface · 正文之前</p>
+                <h3>写在前面</h3>
+                <p>开始读书之前，先花十秒钟认识一下作者。这篇不讲技术，只做一件事：向你介绍我的公众号。</p>
+              </div>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 1 部分 · Foundations</p>
+                <h3>起点：编程与计算的本质</h3>
+                <p>回答「编程是什么、计算是什么、Racket 值不值得学」。全书的地基——零基础读者从这里建立直觉。</p>
+              </div>
+              <span class="chip count">5 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 2 部分 · Basics</p>
+                <h3>基础：用 Racket 写点什么</h3>
+                <p>回答「用 Racket 写点什么，最少要知道什么」。从括号的含义到数据、列表、结构体、函数。</p>
+              </div>
+              <span class="chip count">8 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 3 部分 · Functional</p>
+                <h3>函数式：不动状态的计算</h3>
+                <p>从高阶函数、递归到 λ 演算、Y-Combinator、迷你解释器——Racket 的核心范式。</p>
+              </div>
+              <span class="chip count">9 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 4 部分 · State</p>
+                <h3>命令式与状态</h3>
+                <p>异常、资源管理、状态机实战，最后用枢纽章把命令式、GUI、Web 串成一条线。</p>
+              </div>
+              <span class="chip count">4 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 5 部分 · Objects &amp; GUI</p>
+                <h3>对象与界面</h3>
+                <p>从 class 系统到第一个 GUI、控件、自定义绘制、声明式 GUI、后台任务。</p>
+              </div>
+              <span class="chip count">8 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 6 部分 · Language Design</p>
+                <h3>语言设计与计算模型</h3>
+                <p>宏、延续、generator、模块机制、惰性求值、DSL，最后亲手造一门 #lang 语言。</p>
+              </div>
+              <span class="chip count">8 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">第 7 部分 · Production</p>
+                <h3>走向生产：工程化与实战</h3>
+                <p>工具链、打包分发、数据库、Web 实战、工业级案例——读完能用 Racket 做什么。</p>
+              </div>
+              <span class="chip count">18 章</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="prow" href="#">
+              <div class="body">
+                <p class="eyebrow">Appendix · 附录</p>
+                <h3>嵌入式运行时 · 编译指南 · 实现剖析</h3>
+                <p>把 Racket 嵌进原生应用的通用模式、Racket 编译完全指南、Racket 语言实现剖析。</p>
+              </div>
+              <span class="chip count">3 篇</span>
+              <svg class="arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+          </div>
+        </section>
+        <!-- 页脚 -->
+        <footer class="foot">
+          <p class="license">Racket 编程入门 · 吉人 · 正文 CC BY-NC-SA 4.0 · 示例代码 MIT</p>
+          <nav aria-label="Reader help">
+            <a href="#">阅读与勘误</a>
+            <a href="#" lang="en">Reader information</a>
+            <a href="#">全部产品</a>
+          </nav>
+        </footer>
+        <p class="proto-note">原型 v0.1 · 按 ◐ 切换亮暗 · 章数徽标为推导新增</p>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+  </script>
+</body>
+</html>

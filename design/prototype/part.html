@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racket 编程入门 — 卷目录原型（章节导航）</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  /* ==== 卷目录页专属：PartHeader + ChapterRow（对照 app/book/[part]/page.tsx） ==== */
+  .book { flex: 1; }
+  .main { flex: 1; min-width: 0; }
+  .col { max-width: 46rem; margin: 0 auto; padding: 56px 40px 72px; }
+  .parthead h1 { font-size: 30px; font-weight: 700; letter-spacing: -.01em; margin: 10px 0 14px; }
+  .parthead .desc { font-size: 15px; color: var(--ink-2); line-height: 1.75; }
+  .chlist { border-top: 1px solid var(--line); margin-top: 36px; padding-top: 20px; }
+  .crow {
+    display: flex; align-items: flex-start; gap: 14px; padding: 16px 12px; margin: 0 -12px;
+    border-radius: 6px; text-decoration: none; transition: background .12s ease;
+  }
+  .crow:hover { background: var(--raised); }
+  .crow + .crow { border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+  .crow .no { flex: none; font-family: ui-monospace, "JetBrains Mono", "Fira Code", Consolas, monospace; font-size: 12px; color: var(--faint); margin-top: 3px; }
+  .crow h3 { font-size: 15.5px; font-weight: 600; color: var(--ink); transition: color .12s ease; }
+  .crow:hover h3 { color: var(--accent); }
+  .crow p { font-size: 13px; color: var(--mute); line-height: 1.6; margin-top: 3px; }
+  .crow .arrow { flex: none; margin-top: 5px; color: var(--faint); transition: color .12s ease; }
+  .crow:hover .arrow { color: var(--accent); }
+  .proto-note { font-size: 11px; color: var(--faint); text-align: center; padding-bottom: 14px; }
+</style>
+</head>
+<body>
+  <div class="window" id="app">
+    <div class="chrome">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="urlpill"><span class="lock">🔒</span>racket.jrtx.site/book/part-2</div>
+      <button class="iconbtn" id="themeBtn" title="切换亮暗主题">◐</button>
+    </div>
+    <div class="viewport">
+      <aside class="sidebar">
+        <div class="brand"><a href="#">Racket 编程入门</a></div>
+        <a class="slink top" href="#">写在前面</a>
+        <a class="slink top" href="#">问题反馈</a>
+        <button class="spart"><span class="car">▾</span><span class="n">1.</span>起点：编程与计算的本质</button>
+        <button class="spart"><span class="car">▾</span><span class="n">2.</span>基础：用 Racket 写点什么</button>
+        <div class="schapters">
+          <a class="slink" href="#">括号不是负担——Racket 的结构之美</a>
+          <a class="slink" href="#">Racket 的数据——原子与复合</a>
+          <a class="slink" href="#">列表——Racket 的主力数据结构</a>
+          <a class="slink" href="#">结构体——给数据一个明确的形状</a>
+          <a class="slink" href="#">函数与闭包——Racket 里动作如何成为值</a>
+          <a class="slink" href="#">符号表达式——Lisp 元编程的根基</a>
+          <a class="slink" href="#">从嵌套到管道——Racket 函数组合的两种方向</a>
+          <a class="slink" href="#">告别循环——map、filter 与 fold 的列表处理</a>
+        </div>
+        <button class="spart"><span class="car">▸</span><span class="n">3.</span>函数式：不动状态的计算</button>
+        <button class="spart"><span class="car">▸</span><span class="n">4.</span>命令式与状态</button>
+        <button class="spart"><span class="car">▸</span><span class="n">5.</span>对象与界面</button>
+        <button class="spart"><span class="car">▸</span><span class="n">6.</span>语言设计与计算模型</button>
+        <button class="spart"><span class="car">▸</span><span class="n">7.</span>走向生产：工程化与实战</button>
+        <button class="spart"><span class="car">▸</span>附录</button>
+      </aside>
+      <main class="main">
+        <div class="col">
+          <header class="parthead">
+            <p class="eyebrow">第 2 部分 · Basics</p>
+            <h1>基础：用 Racket 写点什么</h1>
+            <p class="desc">回答「用 Racket 写点什么，最少要知道什么」。从括号的含义到数据、列表、结构体、函数，建立 Racket 代码的基本形状。</p>
+          </header>
+          <nav class="chlist" aria-label="本卷章节">
+            <a class="crow" href="#">
+              <span class="no">01</span>
+              <div><h3>括号不是负担——Racket 的结构之美</h3><p>括号不是需要忍受的噪音，而是 Racket 结构本身——读懂它，就读懂了这门语言的一切。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">02</span>
+              <div><h3>Racket 的数据——原子与复合</h3><p>数字、字符串、符号、布尔值，以及把它们拼起来的复合方式——数据是一切计算的原料。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">03</span>
+              <div><h3>列表——Racket 的主力数据结构</h3><p>一个语言把列表做到一等公民，会是什么样子？cons、car、cdr 与列表思维。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">04</span>
+              <div><h3>结构体——给数据一个明确的形状</h3><p>当列表开始不够用，结构体给数据一个有名字、有形状的家。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">05</span>
+              <div><h3>函数与闭包——Racket 里动作如何成为值</h3><p>函数和数字一样是值——能存、能传、能返回。让这一切成立的，是闭包。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">06</span>
+              <div><h3>符号表达式——Lisp 元编程的根基</h3><p>代码即数据：符号表达式让程序可以像操作数据一样操作程序。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">07</span>
+              <div><h3>从嵌套到管道——Racket 函数组合的两种方向</h3><p>嵌套与管道是同一种计算的两个方向——compose 与 threading 各自的美。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <a class="crow" href="#">
+              <span class="no">08</span>
+              <div><h3>告别循环——map、filter 与 fold 的列表处理</h3><p>不用 for 也能遍历一切：三个高阶函数覆盖九成列表处理场景。</p></div>
+              <svg class="arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+          </nav>
+        </div>
+        <p class="proto-note">原型 v0.1 · 按 ◐ 切换亮暗</p>
+      </main>
+    </div>
+  </div>
+  <script>
+    document.getElementById('themeBtn').addEventListener('click', () => {
+      document.getElementById('app').classList.toggle('dark');
+    });
+  </script>
+</body>
+</html>
