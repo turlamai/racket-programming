@@ -51,7 +51,17 @@ Tokens 提取自 `app/globals.css` 与 `tailwind.config.js` 现行值，保证�
 
 ## 组件词汇
 
-`BrowserShell`（原型壳：地址栏 + 主题切换 ◐）· `TopBar`（移动端顶栏 ☰ + 书名）· `Sidebar`（卷树：写在前面 / 问题反馈 + 七卷 + 附录，可折叠，当前章 accent 标亮）· `PartHeader`（眉题 + 卷题 + 卷描述）· `PartRow`（首页卷行：眉题 + 卷题 + 简介 + 章数徽标，章数徽标为推导）· `ChapterRow`（双位等宽编号 + 章题 + 一句简介）· `Prose`（长文排版：标题阶 / 列表 / 引用 / 表格 / 行内代码）· `CodeBlock`（深底高亮 + 复制按钮 + `;;` 输出注释 / REPL `>` 提示）· `InlineCode`（raised 底 + 焦橙小片）· `ChapterNav`（上一章/下一章，正文末尾固定位置）· `FeedbackBox`（有帮助 / 反馈问题 + GitHub 编辑入口）· `SelectionPill`（选中正文浮出「反馈这段」）· `Footer`（许可 + 阅读帮助链接，仅首页）。
+`BrowserShell`（原型壳：地址栏 + 主题切换 ◐）· `TopBar`（移动端顶栏 ☰ + 书名）· `Sidebar`（卷树：写在前面 / 问题反馈 + 七卷 + 附录，可折叠，当前章 accent 标亮）· `PartHeader`（眉题 + 卷题 + 卷描述）· `PartRow`（首页卷行：眉题 + 卷题 + 简介 + 章数徽标，章数徽标为推导）· `ChapterRow`（双位等宽编号 + 章题 + 一句简介）· `Prose`（长文排版：标题阶 / 列表 / 引用 / 表格 / 行内代码）· `CodeBlock`（深底高亮 + 复制按钮 + `;;` 输出注释 / REPL `>` 提示）· `InlineCode`（raised 底 + 焦橙小片）· `ChapterNav`（上一章/下一章，正文末尾固定位置）· `FeedbackBox`（有帮助 / 反馈问题 + GitHub 编辑入口）· `SelectionPill`（选中正文浮出「反馈这段」）· `SearchBox`（⌘K 或 / 聚焦，结果含摘要并定位章节，侧栏常驻）· `ProgressBar`（顶部阅读进度条）· `FontSizeCtl`（正文字号三档，侧栏底部，记忆选择）· `ResumeBanner`（续读入口，首页）· `Footer`（许可 + 阅读帮助链接，仅首页）。
+
+## 统一阅读体验（2026-11-22，家族书籍站点基线）
+
+家族设计标准新增「长文与书籍站点基线」（design-standard.md §8，修订 2026-11-22）；姊妹书 after-the-build（静态多页）已按该基线实现并通过验收，作为本站的语义参照实现。本书对齐切片如下，排期与证据回填见 issue #11：
+
+- **暗色主题**：token 已在本契约推导定稿，实现照搬即可（切片 ①）。
+- **全文搜索**：解禁当时「不在范围」的决定——侧栏常驻 SearchBox，构建期或客户端索引全书章文，⌘K 或 / 聚焦（切片 ②）。
+- **阅读进度条 / 正文字号三档 / 键盘翻章 ← → / 续读记忆**：轻量交互，合并为一个切片（切片 ③）。
+- **SelectionPill**：本站已有，保留为家族加分项，向基线回提。
+- 语义冲突时以 design-standard §8 为准；本文只维护本书的具体取值与例外。
 
 ## 不变式
 
