@@ -40,9 +40,9 @@
 
 `'(1 2 3)` 拆开看，是三个 cons 单元手拉手：
 
-![racket-list-cons-box-pointer](/images/racket-list-cons-box-pointer.svg)
+![点对的 car 与 cdr，以及由三个点对连接到空表的列表](/images/racket-list-cons-box-pointer.svg)
 
-每个 cons 格子分两半：左半放元素，右半是指针，指向下一个格子。最后一个格子的指针指向 `'()`，链就到头了。
+每个点对有两个组成部分：car 保存元素，cdr 保存剩余列表。图中的箭头表示值之间的逻辑引用关系，不代表 Racket 在内存中的具体布局。最后一个点对的 cdr 是空表 `'()`。
 
 手写三层 cons 太累，Racket 给了两个快捷方式。`list` 把参数一个个排好：
 
@@ -103,7 +103,7 @@
 ;; '(2 3)
 ```
 
-`first` 和 `rest` 做的事与 `car`、`cdr` 一模一样，区别只在名字和态度：一眼就看出在处理列表，不用记硬件缩写。
+对于非空列表，`first` 和 `rest` 分别得到与 `car`、`cdr` 相同的结果；但前两者要求非空列表，后两者也接受普通点对。一眼就看出在处理列表，不用记硬件缩写。
 
 **处理列表时用 `first`/`rest`，处理裸 pair 时才回到 `car`/`cdr`。**
 
