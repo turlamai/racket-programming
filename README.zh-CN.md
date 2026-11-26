@@ -78,7 +78,7 @@
 |----|------|
 | 27 | 面向对象——Racket 的 class 与对象 |
 | 28 | 第一个 GUI——窗口、按钮与点击计数器 |
-| 29 | 为什么 Racket GUI 写不出“现代界面” |
+| 29 | 从控件到应用——理解现代 GUI 的三条路线 |
 | 30 | 8 种控件覆盖九成场景——按语义选 Racket GUI 控件 |
 | 31 | Racket GUI 控件清单——内置库一次看全 |
 | 32 | 自定义控件——子类化 canvas 自己画 |
@@ -118,7 +118,7 @@
 | 52 | 数据库是什么——从 Excel 到 SQL |
 | 53 | 从零开始用 Racket 写一个 Web Server |
 | 54 | 深入理解 Racket Web Server 的工作方式 |
-| 55 | Koyo——Racket Web 应用的现代工具箱 |
+| 55 | Loom——从零开发第一个 Web 应用 |
 | 56 | 稳定上线——给 Racket Web 程序配好 Nginx |
 | 57 | xexpr——HTML 是数据，不是字符串 |
 | 58 | FFI——当 Racket 需要调用 C |
