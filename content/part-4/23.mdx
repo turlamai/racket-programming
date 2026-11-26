@@ -17,7 +17,7 @@
 ; 文件不存在，这里会抛出 exn:fail:filesystem 异常
 ```
 
-如果这个函数是你自己设计的，“文件不存在”该怎么报告？几种笨办法都难令人满意。返回 `#f`，可 `#f` 既可能是“文件不存在”，也可能是“文件存在但内容为空”，上层分不清；返回一个带标记的列表，每一层调用都得拆开看一眼；直接打印一行错误，程序却带着半坏的状态继续跑。
+如果这个函数是你自己设计的，“文件不存在”该怎么报告？几种笨办法都难令人满意。返回 `#f` 可以表示“文件不存在”，但如果 API 还用它表示其他失败情况，上层就需要额外约定；返回一个带标记的列表，每一层调用都得拆开看一眼；直接打印一行错误，程序却带着半坏的状态继续跑。
 
 异常机制立了一条清晰的约定。
 
@@ -82,19 +82,13 @@
 
 谓词写在前面，第一个匹配上的就处理，后面的不再试。所以把更具体的类型放前面，更通用的 `exn:fail?` 放后面兜底。
 
-## with-handlers*：handler 能拿到抛出点的续延
+## with-handlers*：尾位置与中断行为
 
-`with-handlers` 还有个带星号的兄弟 `with-handlers*`，长得一模一样，区别藏在 handler 的调用位置里。
+两者都在处理异常之前退出受保护主体，恢复整个处理表达式外部的控制上下文。它们不会自动提供异常抛出点的延续。
 
-普通的 `with-handlers`：handler 跑在 `with-handlers` 这个表达式的续延里。换句话说，handler 一返回，值就交给 `with-handlers` 外面的代码，它没法回到抛出异常的那个点。
+区别在于：`with-handlers*` 的处理函数调用位于整个表单的尾位置，并且调用处理函数时不显式禁用 break（中断）；普通 `with-handlers` 则在调用处理函数时禁用 break。
 
-`with-handlers*` 不一样：handler 跑在 `raise` 那一刻的续延里，尾位置紧贴着 `raise`。这意味着 handler 手里攥着抛出点的续延——它能在内部用 `call/cc` 把这个续延抓出来、重新抛一个异常、或者做更复杂的非局部跳转，而不只是返回一个值。
-
-日常你只需要 `with-handlers`。
-
-**等你发现 handler 里想干的事超出“返回一个值”——比如要抓续延、重抛、或做非局部跳转——才换成 `with-handlers*`。**
-
-还有一个附带差别：`with-handlers` 在调 handler 时会临时关掉中断（break，比如 Ctrl+C），`with-handlers*` 不会。所以用 `with-handlers*` 时，handler 跑的过程中还能被 Ctrl+C 打断。
+入门阶段使用 `with-handlers` 即可。需要精确控制尾位置或中断行为时，再参考 [Racket Reference: Exceptions](https://docs.racket-lang.org/reference/exns.html)。
 
 ## 异常沿着调用栈向外逃
 
@@ -114,11 +108,13 @@
 
 **这正是异常比“层层检查返回值”省事的地方：只有知道怎么处理的层，才需要管它。**
 
+![异常传播：退出受保护的计算并返回处理器的结果](/images/racket-exception-propagation.svg)
+
 注意这件事的性质：handler 接的是运行时调用链上的异常，不是源代码里词法上包着它的异常。换句话说，异常机制是动态绑定的控制流，和函数的词法作用域不是一回事——这跟后面要讲的 continuation 是一路货色。
 
 ## 自定义异常：给错误一个专属类型
 
-内置的 `exn:fail` 只能告诉你“出错了”。如果你想把“JSON 解析错”和“网络超时”分开处理，就得给异常一个更细的类型。Racket 的异常是结构体，可以继承 `exn` 自己造：
+内置的 `exn:fail` 只能告诉你“出错了”。如果你想把“JSON 解析错”和“网络超时”分开处理，可以定义更细的异常类型。以下只演示异常类型，不是完整 JSON 解析器。Racket 的异常是结构体，可以继承 `exn` 自己造：
 
 ```racket
 (require racket/string)
@@ -128,7 +124,7 @@
  #:transparent)
 
 (define (parse-json s)
- (if (string-prefix? "{" s)
+ (if (string-prefix? s "{")
  'ok
  (raise (exn:json "bad json" (current-continuation-marks) s))))
 
@@ -175,7 +171,7 @@ Racket 准备了一组抛错函数，差别就在它们抛出的异常类型不�
 
 **真正的区别是类型不同：`exn:fail:user` 告诉工具和日志系统“这条错误是给终端用户看的，别当成程序员的 bug”。**
 
-写库的公共 API，用 `raise-user-error` 更贴切。
+公共库 API 应按错误性质选择异常类型；参数契约错误宜使用 `raise-argument-error`，面向终端用户的错误才适合 `raise-user-error`。
 
 这一组函数都是 `raise` 的糖——底层都是造一个特定子类型的 `exn` 再 `raise` 出去。选哪个，取决于你想让接的人靠类型读出什么意图。
 
@@ -203,11 +199,11 @@ Racket 准备了一组抛错函数，差别就在它们抛出的异常类型不�
 
 最后，别把 Racket 的 handler 想成别的语言里的 try/catch。它是动态绑定的控制结构，能沿调用栈穿越好几层，比词法的 try/catch 灵活得多——这正是它强大的地方，也是新手容易踩空的地方。
 
-## 异常背后是 escape continuation
+## 异常与非局部控制转移
 
 回头看异常的几个特征：抛出后沿调用栈向外逃、穿过不接它的函数、被运行时安装的 handler 接住、handler 一返回控制流就跳走。这套行为和“函数正常返回”完全不是一回事，倒很像某种受控的跳转。
 
-事实上，Racket 的异常就是建立在 escape continuation 上的。`raise` 调用当前安装的 handler，同时丢弃从抛出点到 handler 之间的所有续延，相当于一次“只进不退”的跳转。它不能像完整的 `call/cc` 那样随便回到程序里的任意一点，只能在 handler 处着陆。
+在常用的 `with-handlers` 模型中，异常处理会退出受保护计算，再调用匹配的处理函数。底层 `raise` 则调用当前异常处理器，其控制行为取决于处理器；不能把所有底层异常处理器一概等同于 escape continuation。
 
 这是一个伏笔。等你学到 continuation 和 `call/cc`，你会发现异常不过是这套更通用的跳转机制里、一个被收得紧紧的特例。
 
