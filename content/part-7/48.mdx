@@ -36,9 +36,11 @@ my-first-pkg/
  └── test-main.rkt
 ```
 
-这是 Racket 官方生态中 **最常见、最稳妥** 的结构，新手不建议自行变形。
+这是一个单 collection 包的示例结构。多 collection 包或包含原生组件的包可以采用不同布局。
 
 ## 一个真实可发布的模块
+
+将以下内容保存为 main.rkt：
 
 ```racket
 #lang racket/base
@@ -61,13 +63,15 @@ my-first-pkg/
 
 ## info.rkt：包元数据的中枢
 
+保存为 info.rkt，并将作者邮箱替换为实际维护者的公开联系方式：
+
 ```racket
 #lang info
 
 (define collection "my-first-pkg")
 (define pkg-desc "My first Racket package")
 (define version "0.1.0")
-(define pkg-authors '("Your Name"))
+(define pkg-authors '("you@example.com"))
 
 (define deps '("base"))
 (define build-deps '("scribble-lib" "racket-doc" "rackunit-lib"))
@@ -81,7 +85,7 @@ my-first-pkg/
 
 ## 文档：不是 Catalog 硬门槛，但正式包应该有
 
-Package Catalog 并不把“必须有 Scribble 文档”当成所有包的硬性准入条件。不过，对准备给别人使用的正式包来说，文档几乎是必需品。
+Package Catalog 并不把“必须有 Scribble 文档”当成所有包的硬性准入条件。不过，对准备给别人使用的正式包来说，文档非常重要。将以下内容保存为 my-first-pkg.scrbl：
 
 ```racket
 #lang scribble/manual
@@ -108,6 +112,8 @@ Adds 1 to @racket[x].
 
 ## 测试：为构建而写
 
+创建 tests/test-main.rkt：
+
 ```racket
 #lang racket/base
 
@@ -123,14 +129,16 @@ Adds 1 to @racket[x].
 测试应覆盖正常输入、边界与错误行为。先验证本地链接安装，再从源码重新安装；远程构建结果仍需独立检查。
 
 ```bash
-raco pkg install --auto --link .
-raco test .
+raco pkg install --auto --name my-first-pkg --link .
+raco test tests/test-main.rkt
 raco setup --pkgs my-first-pkg
 ```
 
 ## README 与 LICENSE
 
-README 至少应包含安装方式：
+发布前可先验证 `racket -e '(require my-first-pkg) (displayln (add1-safe 41))'`（在 PowerShell 中也可直接执行；其他 shell 按其引号规则调整），预期输出 42。完成练习后可使用 raco pkg remove my-first-pkg 删除本次链接安装，不会删除链接指向的源码目录。正式项目的包名应先检查是否与公共目录或已安装包冲突。
+
+README 至少应包含安装方式（以下远程安装命令只有在自己的同名包成功登记后才适用）：
 
 ```bash
 raco pkg install my-first-pkg
@@ -156,6 +164,8 @@ raco pkg install my-first-pkg
 进行安装。
 
 ## 版本与维护
+
+可以阅读 [Glaze](https://github.com/turlamai/glaze)、[Rivet](https://github.com/turlamai/rivet) 和 [Loom](https://github.com/turlamai/loom) 的项目元数据、测试及文档组织，比较真实工程与本章最小示例的差异。源码布局与发布状态以实际仓库为准，不要求初学者复制大型项目的全部结构。
 
 - 第一次发布使用 `0.1.0` 即可
 - 后续更新递增版本号
