@@ -46,7 +46,7 @@
  [x x]) ;; 42，x 被绑到 42
 ```
 
-通配符 `_` 同样匹配任何值，但不绑定——你只关心“匹配上了”，不关心值是什么。在 `cond` 里你写 `else` 兜底，在 `match` 里 `else` 只是个普通变量名，兜底要用 `_`。
+通配符 `_` 同样匹配任何值，但不绑定——你只关心“匹配上了”，不关心值是什么。在 `cond` 里你写 `else` 兜底，在 match 中推荐使用 _ 兜底，避免将 else 误认为 cond 中的专用分支。
 
 ![模式匹配同时检查列表形状并绑定字段](/images/racket-match-destructure.svg)
 
@@ -150,7 +150,7 @@
  [_ 'other]) ;; 'three-elements
 ```
 
-`app` 让你能“先变换、再判断”，任何函数都能塞进模式里。`not` 是它们的反面，匹配“不是这种形状”的值，不绑定任何变量：
+`app` 让你能“先变换、再判断”，传入的过程需要接受匹配值，并返回与后续模式数量相符的结果；应确保它能安全处理输入。`not` 是它们的反面，匹配“不是这种形状”的值，不绑定任何变量：
 
 ```racket
 (match "hi"
@@ -188,7 +188,7 @@ b ;; 2
 
 注意那层双括号——`define/match` 的每个分支对应一组参数模式，所以 `(list a b c)` 外面还要包一层。
 
-**只要数据有固定形状，就别再手动 `car` `cdr`——`match-define` 直接拆开。**
+数据形状固定且不匹配属于错误时，可以使用 match-define；如果需要处理多种输入形状，应使用 match 并提供适当的失败分支。
 
 ## 实战：拆解一门小语言
 
@@ -230,6 +230,34 @@ b ;; 2
 (define (show-user u)
   (string-append (user-name u) " <" (user-email u) ">"))
 ```
+
+### 参考答案
+
+```racket
+#lang racket
+(require rackunit)
+
+(define (handle-result r)
+  (match r
+    [(list 'ok value) (format "成功：~a" value)]
+    [(list 'error reason) (format "失败：~a" reason)]
+    [_ "未知"]))
+
+(struct user (name email) #:transparent)
+(define (show-user u)
+  (match u
+    [(user name email)
+     (string-append name " <" email ">")]))
+
+(check-equal? (handle-result '(ok 42)) "成功：42")
+(check-equal? (handle-result '(error timeout)) "失败：timeout")
+(check-equal? (handle-result '(ok)) "未知")
+(check-equal? (handle-result 42) "未知")
+(check-equal? (show-user (user "Ada" "ada@example.com"))
+              "Ada <ada@example.com>")
+```
+
+保存为 match-test.rkt，执行 `raco test match-test.rkt`，预期五项检查通过。第二题原代码并没有显式判断形状，而是依赖访问器的类型检查；改为 match 后，字段对应关系更加集中。这个示例假设 user 的两个字段都是字符串。
 
 改完想一想：原代码里，「判断它是什么形状」和「把里面的东西取出来」是分两步做的。改用 `match` 后，这两步合成了几步？
 > 模式匹配让你用数据的形状说话：画出一个模式，判断与提取一次完成。一旦习惯了按形状思考，`car`/`cdr` 和嵌套 `cond` 的噪音就从代码里消失。
