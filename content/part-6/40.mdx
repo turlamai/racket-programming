@@ -1,10 +1,10 @@
 # 惰性求值——按需才算
 
-> Racket 默认急着把每个参数都算好；可你想表示“所有自然数”、或跳过那段永远用不上的计算时，急就急不来了。`delay`/`force` 把计算推迟到催账那一刻，`lazy` 和流让你装下一整条无穷的链。
+> Racket 默认采用严格的过程参数求值；可你想表示“所有自然数”、或跳过那段永远用不上的计算时，急就急不来了。`delay`/`force` 把计算推迟到催账那一刻，`lazy` 和流让你装下一整条无穷的链。
 
 你写过 `(map (λ (x) (* x x)) '(1 2 3))`，知道 Racket 会老老实实把每个元素算出来。但你想过没有：要表示从 1 开始的所有自然数，该用什么装？一个明明用不上的参数，凭什么非要先算它？Racket 默认严格求值——函数调用前，参数全部算完。但标准库里备着一套按需计算的工具，专治这两种拧巴。这篇讲三件事：`delay`/`force` 怎么把计算存起来，`lazy` 为什么和 `delay` 不一样，`racket/stream` 如何用有限的初始结构表示无穷序列。
 
-## 默认是急的
+## 默认的严格求值
 
 看一个只用了第一个参数的函数：
 
@@ -55,7 +55,7 @@ p
 ;; => 42 没再打印——缓存命中，body 没再执行
 ```
 
-**`delay` 把一段计算打包成 promise，`force` 才真正去算，而且只算一次。** 算完的结果被缓存进 promise，之后每次 `force` 直接返回。这个“只算一次”是惰性用来提效的根：贵的那段计算，要么不算，要么只算一遍。
+普通 delay 创建的 promise 在首次 force 时计算，随后复用缓存的结果；如果计算抛出异常，该异常也会被缓存。这里不讨论特殊 promise 类型或并发 force 的行为。 算完的结果被缓存进 promise，之后每次 `force` 直接返回。这个“只算一次”是惰性用来提效的根：贵的那段计算，要么不算，要么只算一遍。
 
 ## lazy：能串成链的 promise
 
@@ -83,7 +83,7 @@ p
 
 `force` 一个普通 `delay` 产生的 promise 时，如果结果又是 promise，它不会自动继续强制求值。`lazy` 则支持尾部组合，让一次 force 沿 promise 链继续计算；这不保证程序总内存恒定。
 
-**`lazy` 是为链生的——一次 `force` 沿着链 tail-call 走到底，长链不爆栈。** 这正是手搓惰性数据结构要用的积木。下面介绍标准库的流接口，不需要依赖其内部实现。
+lazy 支持在尾位置组合 promise，避免为每层链接保留待完成的 force 控制上下文；仍需考虑计算终止及数据占用的空间。 这正是手搓惰性数据结构要用的积木。下面介绍标准库的流接口，不需要依赖其内部实现。
 
 ## 用流装下无穷
 
@@ -147,11 +147,11 @@ p
 
 **按需生成结果并不意味着只访问同样数量的输入。** 过滤和停止条件都可能要求额外计算；流式 map 和 filter 可以避免先构造完整的中间列表。
 
-## 该懒的时候才懒
+## 何时采用惰性求值
 
-惰性不是万灵药。每一个 promise 都是一次额外的分配和间接，每一次 `force` 都是一次“算过了没”的判断。把所有东西都 delay 一遍，程序只会更慢、更难调——求值时机被打散了，你很难知道某段计算究竟在哪个瞬间发生。
+惰性不是万灵药。每一个 promise 都是一次额外的分配和间接，每一次 `force` 都是一次“算过了没”的判断。无差别地延迟计算可能增加开销，也会使副作用的发生时机更难判断——求值时机被打散了，你很难知道某段计算究竟在哪个瞬间发生。
 
-惰性真正值得用的就三种场合：
+常见适用场合包括：
 
 - 无穷或超长的数据，比如自然数流、文件按行读；
 - 算了可能用不上的值，比如某个昂贵分支的结果；
@@ -159,10 +159,32 @@ p
 
 **惰性不是免费午餐，它换来了延迟和无穷，代价是每次 force 的开销和更难预测的求值时机。** 该急的地方急，该懒的地方懒。
 
+## 动手验证：缓存与有限取样
+
+```racket
+#lang racket
+(require racket/promise racket/stream rackunit)
+(define calls 0)
+(define p (delay (set! calls (add1 calls)) 42))
+(check-equal? calls 0)
+(check-equal? (force p) 42)
+(check-equal? (force p) 42)
+(check-equal? calls 1)
+(define failures 0)
+(define bad (delay (set! failures (add1 failures)) (error 'demo "failure")))
+(check-exn exn:fail? (lambda () (force bad)))
+(check-exn exn:fail? (lambda () (force bad)))
+(check-equal? failures 1)
+(define (from n) (stream-cons n (from (add1 n))))
+(check-equal? (stream->list (stream-take (from 1) 3)) '(1 2 3))
+```
+
+保存为 lazy-test.rkt 并运行 raco test lazy-test.rkt，预期八项检查通过。测试既验证正常结果的缓存，也验证异常不会导致普通 promise 的主体重复执行。
+
 ## 一个伏笔：stream-cons 是宏
 
 回到 `integers-from`：`(stream-cons n (integers-from (+ n 1)))`。如果 `stream-cons` 是普通函数，它的第二个参数会在调用前被求值——`(integers-from (+ n 1))` 立刻执行，递归调用无法正常结束。
 
 而 stream-cons 可以延迟这次递归调用。因为 `stream-cons` 是个宏。它在编译期把 `(stream-cons a b)` 改写成“默认延迟首元素 `a` 与剩余流 `b` 的求值（也可显式要求立即求值）”，第二个参数根本没被算。这是宏能做、函数做不到的事：控制参数什么时候求值。`delay`、`lazy`、`stream-cons`，本质都在玩同一件事——改写求值时机。可以回看第 35 章，理解宏如何影响求值规则。
 
-> Racket 还有一门 `#lang lazy` 整语言，在那里连函数调用都是惰性的——函数应用采用惰性求值规则，与严格语言模块交互时仍需注意求值边界。把整套机制塞进语言默认行为，是这套思想的极致版本。
+> Racket 还有 Lazy Racket 语言（`#lang lazy`，若当前安装未提供，可通过 `raco pkg install --auto lazy` 安装），在那里连函数调用都是惰性的——函数应用采用惰性求值规则，与严格语言模块交互时仍需注意求值边界。把整套机制塞进语言默认行为，是这套思想的极致版本。
