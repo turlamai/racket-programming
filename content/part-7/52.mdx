@@ -99,8 +99,8 @@ DELETE FROM tasks WHERE done = 1;
 ```racket
 (require db)
 
-;; 1. 打开一个数据库文件（不存在就新建）
-(define conn (sqlite3-connect #:database "app.db" #:mode 'create))
+;; 1. 创建独立的内存数据库，每次运行从空库开始
+(define conn (sqlite3-connect #:database 'memory))
 
 ;; 2. 建表、插数据、查询——全是 SQL，通过同一个连接
 (query-exec conn
@@ -118,11 +118,11 @@ DELETE FROM tasks WHERE done = 1;
 ;; 连接暂时保留，供下一节查询练习使用。
 ```
 
-注意几件事：没有 `apt install`，没有 `systemctl start`，没有端口号，没有用户密码。`app.db` 就是一个文件，请勿删除真实数据库。数据库打开时可能还有日志或 WAL 文件，备份应采用 SQLite 支持的一致性备份方式，而非随意复制正在写入的主文件。连接打开到关闭之间，整个数据库就是一个文件在你程序的生命周期里活着。
+注意几件事：没有 `apt install`，没有 `systemctl start`，没有端口号，没有用户密码。上述内存数据库在连接关闭后消失。如果希望跨重启保留数据，可将连接改为 `(sqlite3-connect #:database "app.db" #:mode 'create)`；请勿删除真实数据库。数据库打开时可能还有日志或 WAL 文件，备份应采用 SQLite 支持的一致性备份方式，而非随意复制正在写入的主文件。文件数据库与内存数据库的查询接口相同，但生命周期不同。
 
 这正是 SQLite 为什么适合入门——它去掉了数据库里所有属于“服务”的部分，只留下“能查询”这个核心。你刚才学到的“表”“SQL 四个动词”，在 SQLite 里和在那些重型数据库（PostgreSQL、MySQL）里完全一样。数据库的概念是通用的，SQLite 只是让你用最低成本摸到它。
 
-从使用体验上倒推它的身份：对刚入门的程序来说，SQLite 根本不是“数据库”，而是“一个带查询能力的结构化文件”。理解了这层身份，新手对数据库的恐惧就没了。
+从使用体验上倒推它的身份：对刚入门的程序来说，SQLite 是完整的嵌入式关系数据库引擎，而不仅是文件格式。理解了这层身份，新手对数据库的恐惧就没了。
 
 ## 把 SQL 结果变成 Racket 数据
 
@@ -145,19 +145,19 @@ DELETE FROM tasks WHERE done = 1;
 (query-list conn "SELECT title FROM tasks")
 ;; 首次运行：'("学 Racket")
 
-;; 所有查询完成后关闭连接
-(disconnect conn)
+;; 暂时保留连接，供下面的参数化查询练习使用。
 ```
 
 注意一个关键细节——前面插入数据用的是参数化查询：
 
 ```racket
 (query-exec conn "INSERT INTO tasks (title) VALUES (?)" "学 Racket")
+(disconnect conn)
 ```
 
-那个 `?` 是占位符，真正的值 `"学 Racket"` 作为单独的参数传进去。**永远用这种方式拼接用户输入，不要用 `string-append` 把值直接拼进 SQL 字符串。**
+那个 `?` 是占位符，真正的值 `"学 Racket"` 作为单独的参数传进去。**使用参数化查询传递用户输入，不要用 `string-append` 把值直接拼进 SQL 字符串。**
 
-直接拼接会留下 SQL 注入的漏洞——如果某个值里藏了 `'; DROP TABLE tasks;--`，你的表就没了。参数化查询将 SQL 结构和参数值分开传递，这是用数据库的一条铁律。
+直接拼接会留下 SQL 注入的漏洞——拼接可能改变查询语义或引发语法错误，实际影响取决于数据库接口与权限。参数化查询将 SQL 结构和参数值分开传递，这是用数据库的一条铁律。
 
 ## 事务：多个修改作为一个整体
 
@@ -197,9 +197,7 @@ DELETE FROM tasks WHERE done = 1;
 
 ![普通文件、SQLite 与服务型数据库的选择边界](/images/persistence-evolution.svg)
 
-- 文件 → `(define data ...)`，数据就是个绑定，能存能取，但不会自己找
-- SQLite → `(define/query data ...)`，数据加了查询能力，但还是程序的一部分
-- 服务型数据库 → `(define data elsewhere ...)`，数据搬到了程序之外，独立常驻
+普通文件由应用负责解释数据格式；SQLite 将查询引擎嵌入应用；服务型数据库通过独立服务提供数据访问。图中三种方式不是 Racket 语法。
 
 不管你最后用哪种，核心都回到那个本质：把数据组织成能被快速查询的表，用 SQL 这种声明式语言去对话。理解了这层，这些方案按需求选择，也可以在同一个系统中并存——而你现在已经站在能看懂全貌的位置了。
 
