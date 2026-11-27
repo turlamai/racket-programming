@@ -8,9 +8,9 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 
 ## 命名与缩进
 
-**命名用 kebab-case**：`validate-input`，不是 `validateInput`，更不是 `validate_input`。这是 Lisp 世界的通用习惯，Racket 标准库从头到尾都是这个风格。
+**命名用 kebab-case**：`validate-input`，不是 `validateInput`，更不是 `validate_input`。这是 Lisp 世界的通用习惯，这是常见约定，并非所有库都采用完全相同的命名方式。
 
-**缩进跟着结构走**：每个层级 2 个空格，禁用 Tab 字符。
+**缩进跟着结构走**：优先使用编辑器的 Racket 结构缩进规则；不同语法形式的对齐方式不完全相同。
 
 ```racket
 (define (factorial n)
@@ -18,7 +18,7 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
         [else (* n (factorial (- n 1)))])) ; 递归情况缩进对齐
 ```
 
-**括号交给编辑器管**：括号怎么排不要手写手调——第 50 章的 paredit 就是干这个的，它保证你的括号永远不会失衡。
+**括号交给编辑器管**：括号怎么排不要手写手调——第 50 章的 paredit 就是干这个的，它帮助保持括号平衡，不能替代语法检查与测试。
 
 ## 模块长什么样
 
@@ -27,8 +27,7 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ```racket
 #lang racket
 
-(require racket/contract
-         rackunit)
+(require racket/contract)
 
 (provide (contract-out
           [string->safe-port-number (-> string? (integer-in 1 65535))]))
@@ -36,8 +35,10 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ;; 将字符串转换为合法的端口号
 (define (string->safe-port-number str)
   (define port (string->number str))
-  (unless (and (integer? port) (<= 1 port 65535))
-    (error 'invalid-port))
+  (unless (and (exact-integer? port) (<= 1 port 65535))
+    (raise-argument-error 'string->safe-port-number
+                          "string representing an exact integer from 1 to 65535"
+                          str))
   port)
 ```
 
@@ -56,7 +57,8 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
     'negative)
 
 ;; 推荐模式
-(cond [(positive? x) (if (> x 100) 'large 'small)]
+(cond [(> x 100) 'large]
+      [(positive? x) 'small]
       [else 'negative])
 ```
 
@@ -76,7 +78,9 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ;; @param p1 点1 (cons x y)
 ;; @param p2 点2 (cons x y)
 ;; @return 两点间的直线距离
-(define (distance p1 p2) ...)
+(define (distance p1 p2)
+  (sqrt (+ (sqr (- (car p1) (car p2)))
+           (sqr (- (cdr p1) (cdr p2))))))
 ```
 
 测试就近放在模块的 `module+ test` 里，用 `rackunit`：
@@ -84,7 +88,8 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ```racket
 (module+ test
   (require rackunit)
-  (check-equal? (add1 41) 42)
+  (check-equal? (string->safe-port-number "8080") 8080)
+  (check-exn exn:fail? (lambda () (string->safe-port-number "80.0")))
   (check-exn exn:fail? (λ () (string->safe-port-number "99999"))))
 ```
 
