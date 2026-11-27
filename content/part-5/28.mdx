@@ -24,7 +24,7 @@ GUI 的界面是一堆“东西”：窗口、文字、按钮，各有各的样�
 
 逐行看：
 
-- `#lang racket/gui` —— 注意不是 `#lang racket`。`racket/gui` 在基础语言之上加载了图形库，少了这一行，后面的 `frame%` 都不认识。
+- `#lang racket/gui` —— 注意不是 `#lang racket`。`racket/gui` 在基础语言之上加载了图形库，也可使用 #lang racket 并显式 require racket/gui。
 - `frame%` —— 顶层窗口类。Racket 的类用 `%` 结尾，这是个命名约定，看到 `%` 就知道它是类。`frame%` 自带标题栏、能放大缩小、能关闭。
 - `(new frame% ...)` —— `new` 创建一个类的实例（对象）。方括号里是初始化参数：`[label "..."]` 设标题栏文字，`[width 300]` 和 `[height 200]` 设初始大小。
 - `(send f show #t)` —— `send` 是对象的方法调用：让对象 `f` 执行它的 `show` 方法，参数 `#t` 表示“显示出来”。
@@ -47,7 +47,8 @@ GUI 的界面是一堆“东西”：窗口、文字、按钮，各有各的样�
 (new message% [parent panel] [label "你好，Racket GUI"])
 
 ;; 按钮：button%，先不挂回调
-(new button% [parent panel] [label "点我"])
+(new button% [parent panel] [label "点我"]
+     [callback (lambda (_button _event) (void))])
 
 (send f show #t)
 ```
@@ -66,7 +67,7 @@ GUI 的界面是一堆“东西”：窗口、文字、按钮，各有各的样�
 
 ## 回调：按钮被点时，谁来响应
 
-上面那个按钮点了没反应——因为你没告诉它被点时该干什么。给 `button%` 加一个 `[callback ...]`：
+上面的按钮回调只返回 void，因此没有可见操作。把原来的按钮定义替换为以下版本：
 
 ```racket
 (new button% [parent panel] [label "点我"]
@@ -78,7 +79,7 @@ GUI 的界面是一堆“东西”：窗口、文字、按钮，各有各的样�
 
 回调是一个函数，你把它交给按钮；按钮被点时，由 GUI 帮你调用它。注意它的签名——两个参数：
 
-```racket
+```text
 (λ (b evt) ...)
 ```
 
@@ -123,6 +124,23 @@ GUI 的界面是一堆“东西”：窗口、文字、按钮，各有各的样�
 - `(send msg set-label ...)` —— 调 `message%` 的 `set-label` 方法，把显示的文字换成新内容。`format` 里的 `~a` 是占位符，会被 `count` 的值替进去。`[auto-resize #t]` 让 `message%` 在文字变长时自动放宽，否则较长的文字可能显示不全。
 
 这就是一个完整的 GUI 程序了：有状态（`count`）、有界面（窗口、文字、按钮）、有交互（回调改状态、再更新界面）。三件套齐活。
+
+## 动手练习：加入重置操作
+
+在计数器的 show 调用之前增加：
+
+```racket
+(new button%
+     [parent panel]
+     [label "重置"]
+     [callback (lambda (_button _event)
+                 (set! count 0)
+                 (send msg set-label (format "点击次数：~a" count)))])
+```
+
+手动验收：连续点击三次，显示 3；点击重置，显示 0；再点击一次，显示 1。关闭窗口后不应继续执行本例的交互回调。图形测试需要有可用的桌面显示环境，不能只依靠无窗口的语法检查。
+
+两个回调都修改 count 并刷新显示；真实项目可提取公共刷新过程，避免重复代码。下一章进一步分离业务状态与界面。
 
 ## 事件驱动：代码不再从上往下跑
 
