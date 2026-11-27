@@ -61,11 +61,11 @@ secret: undefined ; require 只把 provide 的搬进来
 (eval '(cons 1 2) ns) ; => '(1 . 2)
 ```
 
-**REPL 的初始命名空间预装了 racket 的导出，模块模式下则是空的。** 这一刀，切开了后面所有的差异。
+普通 racket 交互启动与直接执行模块的动态求值环境不同。模块的词法绑定不等于 current-namespace 中的动态绑定。 这一刀，切开了后面所有的差异。
 
 ## DrRacket 的 Run：直接钻进模块内部
 
-DrRacket 的 Run 按钮做的事，官方文档说得很直白：它的效果等价于在 REPL 里对定义区那个模块调用 `enter!`。
+DrRacket 的 Run 按钮做的事，官方文档说得很直白：可以用 REPL 中的 enter! 来理解模块内部绑定为何在交互区可见，但 DrRacket 的运行环境和重置行为并非完全相同。
 
 `enter!` 来自 `racket/enter`（启动库 `racket/init` 已经重新导出它，所以 REPL 里直接能用）。它做两件事：加载模块，然后把当前命名空间整个搬进模块内部。一旦搬进去，你看世界的方式就和模块自己看自己一样——所有绑定，无论有没有 `provide`，都触手可及。
 
@@ -120,7 +120,7 @@ secret: undefined ; 私有的，不给
 
 **`racket file.rkt` 跑的是模块本身，外加一个叫 main 的子模块。** 把它 `require` 进别的程序时，`main` 不会跑，这正是 `module+` 的妙处：同一段代码，既是库，又是可执行程序。
 
-顺带一提，`module+ test` 是另一个约定子模块，`raco test file.rkt` 专跑它。还有一个容易混淆的命令 `raco run`，它不是核心自带，而是独立包 `raco-run` 提供的，专门用来跑某个指定子模块并传命令行参数，知道有这东西即可。
+顺带一提，`module+ test` 是另一个约定子模块，raco test file.rkt 通常运行 test 子模块；没有该子模块时默认还可能运行模块本身，具体参见 raco test --help。还有一个容易混淆的命令 `raco run`，它不是核心自带，而是独立包 `raco-run` 提供的，专门用来跑某个指定子模块并传命令行参数，知道有这东西即可。
 
 ## load：被模块遗忘的老路
 
@@ -139,24 +139,26 @@ square: undefined
 
 **`load` 是顶层的老路，模块只被声明，绑定不会自动浮上来。** 新代码几乎用不到它，只有在写脚本、或刻意想要顶层求值语义（比如用 `racket/load` 这类语言）时才会碰。日常请用 `require`。
 
+![模块执行、测试与发行入口的区别](/images/racket-execution-entrypoints.svg)
+
 ## 把代码固化：.zo 与 raco exe
 
 最后两种“执行方式”其实不改变代码怎么跑，而是改变代码以什么形态跑。
 
-`raco make file.rkt` 会把模块编译成字节码，存进旁边的 `compiled/` 目录，文件后缀 `.zo`。下次 `require` 或 `racket file.rkt` 时，默认的加载器只要发现 `.zo` 比源文件新，就自动用字节码替代源文件，启动更快。这套机制对你是透明的，代码的语义、可见性、命名空间一个字都不改，纯粹是速度优化。
+`raco make file.rkt` 会把模块编译成字节码，存进旁边的 `compiled/` 目录，文件后缀 `.zo`。默认加载器可以使用符合版本与缓存条件的编译文件；不要将所有缓存有效性简化为文件时间。这套机制对你是透明的，代码的语义、可见性、命名空间一个字都不改，纯粹是速度优化。
 
 ```text
 raco make math.rkt # 在 compiled/ 下生成 math_rkt.zo
 racket math.rkt # 自动走 .zo，更快
 ```
 
-`raco exe` 则走得更远，把模块连同它依赖的运行时一起塞进一份独立的可执行文件里，拷到没装 Racket 的机器上也能跑：
+`raco exe` 则走得更远，把模块连同它依赖的运行时一起塞进一份独立的可执行文件里，但单独复制该文件不保证能在没有 Racket 的机器上运行，还需 raco distribute 收集依赖并在目标环境验证：
 
 ```text
 raco exe -o greet greet.rkt # 生成 greet（Windows 上是 greet.exe）
 ```
 
-`.zo` 缓存只是加速，`raco exe` 才是打包发布。两者都建立在同一个事实上：**`.zo` 只关乎速度、不影响语义，`raco exe` 把代码连同运行时冻成单个可执行文件。**
+`.zo` 缓存只是加速，`raco exe` 才是打包发布。两者都建立在同一个事实上：编译缓存服务于加载与执行；raco exe 生成可执行入口，raco distribute 进一步组织可搬运发行目录。
 
 ## 让一份代码在哪都正常
 
