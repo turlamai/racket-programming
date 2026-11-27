@@ -2,7 +2,7 @@
 
 > Racket 的函数能一次返回多个值，`let-values` 就是把它们一次性接住、绑到本地变量上的专门工具。
 
-你写过返回两个结果的函数——把一个点拆成 x、y 坐标，或者同时给出商和余数。在 Python 里你返回一个元组，在 C 里你传两个指针进去，在 Racket 里，语言本身就让一个函数返回多个值，不必拿结构体或列表去模拟。
+你写过返回两个结果的函数——把一个点拆成 x、y 坐标，或者同时给出商和余数。例如整数除法可以同时给出商和余数。Racket 支持直接返回多个值，也可以在需要保存一组数据时使用列表或结构体。
 
 但多个值一旦返回出来，普通 `let` 就接不住了——它每个位置只等一个值。这篇讲 Racket 怎么用 `let-values` 把一组返回值一次性绑住，以及它和 `define-values`、`call-with-values` 的关系。
 
@@ -26,6 +26,8 @@
 ```
 
 返回的是两个值，不是一个含两个元素的列表。区别看似细微，下一节就知道它为什么重要。
+
+![列表是一个聚合值，而 values 产生多个独立结果](/images/racket-multiple-values.svg)
 
 ## 普通 let 接不住多个值
 
@@ -84,7 +86,7 @@ width
 ;; 640
 ```
 
-它和 `let-values` 的区别只在作用域：**`define-values` 是顶层的 `let-values`，`let-values` 是局部的 `define-values`。** 一个留在外面给整个模块用，一个关在 body 里用完即弃，语义上完全对称。
+它和 `let-values` 的区别只在作用域：`define-values` 是定义形式，也可用于允许内部定义的上下文；`let-values` 是具有明确局部作用域的表达式。
 
 ## let*-values：让后面的绑定看见前面
 
@@ -103,9 +105,9 @@ width
 
 初学者常问：返回多个值再 `let-values` 接，和返回一个 list 再 `match` 或 `car`、`cadr`，有什么区别？
 
-区别在语义。列表表示“一个聚合的数据结构”——一个东西，里面装了好几份；多返回值表示“几个并列的结果”——就是好几个东西。前者要在堆上构造一个容器，后者只是值从生产者直接递给接收者，不打包。
+区别在语义。列表表示“一个聚合的数据结构”——一个东西，里面装了好几份；多返回值表示“几个并列的结果”——就是好几个东西。前者在语义上产生一个容器，后者在语义上产生多个结果；实际分配与优化取决于实现。
 
-更实际的是接口的清晰度。返回 list 的函数，调用者可能拿去当普通列表到处传；返回多值的函数，调用者必须显式用 `let-values` 或 `define-values` 接住——**不会被悄悄当成一个值塞进别的表达式。** 这也是 Racket 标准库大量 API 选择多返回值的原因：`quotient/remainder` 同时给商和余数，`floor/` 同时给向下取整的商和余数，`partition` 把列表一分为二。
+更实际的是接口的清晰度。返回 list 的函数，调用者可能拿去当普通列表到处传；返回多值的函数，调用者必须显式用 `let-values` 或 `define-values` 接住——**不会被悄悄当成一个值塞进别的表达式。** 这也是 Racket 标准库大量 API 选择多返回值的原因：`quotient/remainder` 同时给商和余数，`partition` 把列表一分为二。
 
 ## 实战：归一化一个向量
 
@@ -114,6 +116,8 @@ width
 ```racket
 (define (normalize x y)
  (let ([len (sqrt (+ (* x x) (* y y)))])
+ (when (zero? len)
+   (error 'normalize "zero vector has no direction"))
  (values (/ x len) (/ y len))))
 
 (let-values ([(nx ny) (normalize 3 4)])
@@ -125,7 +129,7 @@ width
 
 ## 语法糖的底：call-with-values
 
-`let-values` 看着像个新东西，底下其实是 `call-with-values` 的语法糖：
+单组 `let-values` 的语义可以用 `call-with-values` 表达：
 
 ```racket
 (let-values ([(x y) (values 1 2)])
