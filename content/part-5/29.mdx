@@ -1,8 +1,8 @@
 # 从控件到应用——理解现代 GUI 的三条路线
 
-> 同一个计数器，可以用 Racket 自带的控件、网页界面或平台原生界面来实现。不同的是界面的实现方式，不变的是数据、状态和事件。
+> 同一份任务业务逻辑，可以用 Racket 自带的控件、网页界面或平台原生界面来实现。不同的是界面的实现方式，不变的是数据、状态和事件。
 
-上一章我们让一个窗口里的按钮改变了计数值。现在我们想做一个任务列表：每一项都有标题、备注、日期，还能被选中。应该怎样组织代码？
+上一章我们让一个窗口里的按钮改变了计数值。现在我们想做一个任务列表：每一项都有标题、备注与完成状态。选中的条目属于界面状态，暂不作为任务的数据字段。应该怎样组织代码？
 
 ## 先想清楚数据，再考虑界面
 
@@ -52,12 +52,17 @@
 
 (define f (new frame% [label "任务"] [width 300]))
 (define p (new vertical-panel% [parent f]))
-(define status (new message% [parent p] [label "未完成"]))
+(struct task (title note done?) #:transparent)
+(define current-task (task "买牛奶" "周末之前" #f))
+(define (finish t) (struct-copy task t [done? #t]))
+(define status (new message% [parent p] [label "未完成"] [auto-resize #t]))
 (new button%
      [parent p]
      [label "完成"]
      [callback (lambda (button event)
-                 (send status set-label "已完成"))])
+                 (set! current-task (finish current-task))
+                 (send status set-label
+                       (if (task-done? current-task) "已完成" "未完成")))])
 (send f show #t)
 ```
 
@@ -89,6 +94,18 @@ Glaze 把 Web 界面放在桌面操作系统的 WebView 中，而不是要求用
 
 ## 动手练习
 
-给前面的 task 增加一个撤销完成状态的函数，再写测试验证它。随后在任意 GUI 中加入一个撤销按钮。想一想：如果明天换了一种界面技术，哪些代码能够原封不动地留下来？
+给前面的 task 增加一个撤销完成状态的函数，再写测试验证它。
+
+参考答案（追加到 task.rkt）：
+
+```racket
+(define (reopen t)
+  (struct-copy task t [done? #f]))
+(module+ test
+  (check-false (task-done? (reopen (finish milk))))
+  (check-equal? (reopen (finish milk)) milk))
+```
+
+随后在 GUI 示例中增加 reopen 和撤销按钮，参照完成按钮的写法更新 current-task，再依据 task-done? 更新文字。想一想：如果明天换了一种界面技术，哪些代码能够原封不动地留下来？
 
 下一章使用 Glaze 开发第一个桌面应用。想深入内置控件和自绘，可以阅读附录 4 至 6。
