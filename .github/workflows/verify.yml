@@ -30,17 +30,6 @@ jobs:
       - name: Install site dependencies
         run: npm ci
 
-      - name: Resolve security update candidate (diagnostic)
-        if: github.event_name == 'pull_request'
-        run: |
-          tmp=$(mktemp -d)
-          cp package.json package-lock.json "$tmp/"
-          cd "$tmp"
-          npm install --package-lock-only --ignore-scripts --save-exact next@16.4.6
-          node -e 'const l=require("./package-lock.json"); console.log("NEXT_LOCK_CANDIDATE="+JSON.stringify(Object.fromEntries(Object.entries(l.packages).filter(([k])=>k==="node_modules/next"||k.startsWith("node_modules/@next/")))));'
-          npm audit --audit-level=low
-        continue-on-error: true
-
       - name: Check content metadata and links
         run: npm run check:content
 
