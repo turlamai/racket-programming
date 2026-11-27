@@ -5,6 +5,10 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const manifest = [
+  [22, 'mini-interpreter', ['(struct num (value)', '(struct bool (value)', '(define (parse datum)', '(module+ test']],
+  [25, 'traffic-light', ['(define (duration state)', '(module+ test']],
+  [38, 'module-entry', ['(provide twice)']],
+
   [14, 'tail-recursion', ['(define (reverse-tail lst)']],
   [17, 'multiple-values', ['(define (division-summary n d)']],
   [19, 'pattern-matching', ['(require rackunit)']],
