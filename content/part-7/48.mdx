@@ -9,7 +9,7 @@
 
 这篇的目标只有一个：
 
-> **让你第一次发布的 Racket 包，符合官方生态的基本预期，并成功进入官方包目录。**
+> 完成一个可本地安装、测试和构建文档的示例包，再了解目录登记过程。包名是否可用及远程构建结果需要实际验证。
 
 ## 什么样的包才算「合格」
 
@@ -45,9 +45,8 @@ my-first-pkg/
 
 (require racket/contract)
 
-(provide add1-safe
- (contract-out
- [even? (-> exact-integer? boolean?)]))
+(provide (contract-out
+ [add1-safe (-> exact-integer? exact-integer?)]))
 
 (define (add1-safe x)
  (+ x 1))
@@ -96,7 +95,7 @@ Package Catalog 并不把“必须有 Scribble 文档”当成所有包的硬性
 
 @section{API}
 
-@defproc[(add1-safe [x integer?]) integer?]{
+@defproc[(add1-safe [x exact-integer?]) exact-integer?]{
 Adds 1 to @racket[x].
 }
 ```
@@ -116,13 +115,17 @@ Adds 1 to @racket[x].
  my-first-pkg)
 
 (check-equal? (add1-safe 1) 2)
-(check-true (even? 2))
+(check-equal? (add1-safe -1) 0)
+(check-exn exn:fail:contract?
+           (lambda () (add1-safe "1")))
 ```
 
-测试的目的不是覆盖率，而是确保包在官方构建环境中不会失败。
+测试应覆盖正常输入、边界与错误行为。先验证本地链接安装，再从源码重新安装；远程构建结果仍需独立检查。
 
 ```bash
+raco pkg install --auto --link .
 raco test .
+raco setup --pkgs my-first-pkg
 ```
 
 ## README 与 LICENSE
@@ -133,7 +136,7 @@ README 至少应包含安装方式：
 raco pkg install my-first-pkg
 ```
 
-LICENSE 建议选择常见协议（MIT / BSD / Apache-2.0）。
+选择符合项目目标的许可证，并提供对应的完整 LICENSE 文本。示例元数据选择 MIT，实际许可证文件必须与之相符。
 
 ## 发布
 
@@ -142,7 +145,7 @@ LICENSE 建议选择常见协议（MIT / BSD / Apache-2.0）。
 3. 选择 **Add Your Own Package**
 4. 填写包名与仓库地址并提交
 
-系统会自动执行构建、测试和文档生成。
+登记需要账户和可用的包名。目录会获取源码信息，构建服务另行尝试安装、测试及生成文档；登记成功不代表这些检查全部通过。
 
 发布成功后，你的包即可通过：
 
@@ -168,4 +171,4 @@ raco pkg install my-first-pkg
 - 信息完整
 - 能通过官方构建
 
-做到这些，你发布的就不是玩具包，而是一个 **正式进入 Racket 生态的官方包**。
+做到这些，你发布的就不是玩具包，而是一个 **在公共目录登记的第三方包，而非 Racket 官方维护或认证的包**。
