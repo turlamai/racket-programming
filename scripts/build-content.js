@@ -15,13 +15,13 @@ const PARTS_META = [
   { id: 'part-4', number: 4, title: '命令式与状态', subtitle: 'State',
     description: '回答"状态随时间怎么改变"。异常、资源管理（Custodian）、状态机实战，最后用枢纽章把命令式、GUI、Web 串成一条线。' },
   { id: 'part-5', number: 5, title: '对象与界面', subtitle: 'Objects & GUI',
-    description: '回答"对象怎么组织、界面怎么搭"。从 class 系统到第一个 GUI、控件、自定义绘制、声明式 GUI、后台任务。' },
+    description: '回答"对象怎么组织、界面怎么搭"。从 class 和第一个 GUI 到 Glaze、Rivet 实战、并发、测试与发布。' },
   { id: 'part-6', number: 6, title: '语言设计与计算模型', subtitle: 'Language Design',
     description: '回答"语言本身是怎么造出来的"。宏、延续、generator、模块机制、惰性求值、DSL，最后亲手造一门 #lang 语言。' },
   { id: 'part-7', number: 7, title: '走向生产：工程化与实战', subtitle: 'Production',
     description: '回答"读完这本书，我能用 Racket 做什么"。工具链、打包分发、数据库、Web 实战、工业级案例，对标 Core Python Applications Programming。' },
   { id: 'appendix', number: 8, title: '附录', subtitle: 'Appendix',
-    description: '把 Racket 嵌进原生应用的核心技术（嵌入式运行时通用模式）、Racket 编译完全指南、Racket 语言实现剖析。' },
+    description: '把 Racket 嵌进原生应用的核心技术（嵌入式运行时通用模式）、Racket 编译完全指南、Racket 语言实现剖析，以及标准控件、Canvas 和 gui-easy 扩展教程。' },
 ];
 
 // Chapter slug is a plain numeric string (global chapter number for the book,
