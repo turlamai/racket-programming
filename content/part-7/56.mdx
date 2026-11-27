@@ -103,6 +103,8 @@ Nginx 接收请求 → 转发给 Racket → 再把响应返回给客户端。
 
 ## 最小 Nginx 配置（HTTP）
 
+以下命令以 Debian/Ubuntu 的 Nginx 与 systemd 布局为例。example.com 是占位域名，实际操作前换成自己控制的域名，确认 DNS、端口与防火墙配置。
+
 假设你的 Racket 程序运行在：
 
 ```text
@@ -127,11 +129,13 @@ server {
 
  proxy_set_header Host $host;
  proxy_set_header X-Real-IP $remote_addr;
- proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+ proxy_set_header X-Forwarded-For $remote_addr;
  proxy_set_header X-Forwarded-Proto $scheme;
  }
 }
 ```
+
+本例假定 Nginx 是唯一对外代理，因此覆盖客户端传入的 X-Forwarded-For。若前面还有 CDN 或负载均衡器，应配置可信代理地址与真实 IP 解析规则；不能直接信任客户端自报的代理头。
 
 ### 启用配置
 
@@ -196,9 +200,11 @@ app/
 
 ```nginx
 location /static/ {
- alias /home/user/app/static/;
+ alias /opt/racket-app/static/;
 }
 ```
+
+确保 Nginx 工作进程具有该静态目录的读取与目录遍历权限；不应把数据库、密钥或源码目录整体作为静态资源发布。
 
 ### Racket 中引用
 
@@ -259,6 +265,20 @@ sudo systemctl enable racket-app
 sudo systemctl start racket-app
 ```
 
+## 部署验证
+
+先检查后端，再检查代理层：
+
+```sh
+curl -i http://127.0.0.1:8000/
+sudo systemctl status racket-app --no-pager
+sudo journalctl -u racket-app -n 50 --no-pager
+sudo nginx -t
+curl -i -H 'Host: example.com' http://127.0.0.1/
+```
+
+域名和证书配置完成后，再通过实际域名的 HTTPS 地址验证。不要把证书检查失败当作正常现象而关闭客户端验证。公开部署还需要设置请求大小限制、超时、访问日志、数据备份及升级回滚流程；本章仅给出基础结构。
+
 ## 常见问题与排查思路
 
 ### 浏览器 502 Bad Gateway
@@ -296,7 +316,7 @@ Nginx 并不是 Racket 的对立面，而是它在生产环境中的 **天然搭
 
 一旦你掌握了这个部署模式，你会发现：
 
-- 本地开发 → 服务器上线几乎无差别
+- 本地代码与服务器代码可以共享业务逻辑，但权限、网络、证书、数据目录和运行环境需要独立验收
 - Racket Web 完全可以胜任严肃的服务端工作
 
 这正是 Racket 作为「可扩展语言」在工程实践中的价值所在。
