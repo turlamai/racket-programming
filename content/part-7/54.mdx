@@ -77,7 +77,7 @@ Servlet 的处理函数需要返回一个 `can-be-response?`。Racket 默认的 
 随着你对 Web 的理解加深，会意识到：
 服务器返回的不只是文本或页面，而是一整套结构化信息，包括：
 
-1. 状态码（是否成功）
+1. 状态码（成功、重定向、客户端错误、服务端错误等语义）
 2. 响应头（如何解释内容）
 3. 响应体（真正的数据）
 
@@ -189,6 +189,23 @@ Web 开始变得可组合、可抽象、可复用。
 
 这不是在“学框架”，而是在 **逐层揭开 Web 的真实结构**。
 
+## 实验：不启动服务器也能检查响应
+
+将以下内容保存为 response-test.rkt：
+
+```racket
+#lang racket/base
+(require web-server/http rackunit)
+(define (missing)
+  (response/xexpr '(p "Not found") #:code 404))
+(define r (missing))
+(check-true (response? r))
+(check-equal? (response-code r) 404)
+(check-equal? (response-code (response/xexpr '(p "OK"))) 200)
+```
+
+运行 raco test response-test.rkt，预期三项检查通过。这是响应对象层的测试，不能替代真实连接、HTTP 序列化和浏览器端验证。
+
 ## 请求并发与应用状态
 
 服务器可能同时处理多个请求，因此不能假定共享变量的读取、修改和写入天然组成原子操作。每个请求独立校验输入；共享状态需要明确的同步与事务边界。HTTP 本身不要求服务端保存此前请求的上下文；应用可通过 Cookie 与会话建立关联。
@@ -200,7 +217,7 @@ Web 开始变得可组合、可抽象、可复用。
 Racket 的 Web Server 并不试图用复杂框架把你包起来。
 它提供的是一种 **逐步深入的模型**：
 
-- 初学时可以忽略协议
+- 初学时可以先使用框架封装，再逐步了解协议
 - 进阶时可以精确控制
 - 全程不脱离函数和数据
 
