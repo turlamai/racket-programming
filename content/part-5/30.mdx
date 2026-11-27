@@ -1,180 +1,135 @@
-# 8 种控件覆盖九成场景——按语义选 Racket GUI 控件
+# Glaze——从零开发第一个桌面应用
 
-> Racket 的 `racket/gui` 里，九成的界面靠 8 个控件类就搭得起来。选哪个，不取决于它长什么样，取决于用户要对它做什么。
+> Glaze 将 Racket 业务逻辑与 HTML、CSS、JavaScript 界面连接起来，在操作系统提供的原生 WebView 窗口中运行。本章从一个按钮开始，走通界面与后端之间的调用。
 
-你用 `racket/gui` 写过几个窗口，知道 `frame%`、`panel%`、`button%` 怎么拼到一起。可真要搭一个表单，对着文档里几十个控件类，你反而愣住了：这个输入框，是 `text-field%` 还是别的？几个互斥选项，该摆成 `radio-box%` 还是塞进 `choice%`？想显示进度，`gauge%` 和 `slider%` 到底谁是谁？
+上一章介绍了三种桌面界面路线。本章选择 Glaze，下一章进一步组织界面和数据。第 32 章再学习 Rivet 的平台原生控件路线。
 
-让人卡住的，从来不是不会用某个类，而是没想清楚一件事：用户对着这个控件，到底要做什么。
+## 先认识界面的三种语言
 
-**选哪个控件，取决于用户要对它做什么，不取决于它长什么样。**
+HTML 描述页面有哪些元素，例如标题和按钮；CSS 描述这些元素如何排列、使用什么颜色和尺寸；JavaScript 负责响应点击等交互。WebView 是操作系统提供的页面渲染组件，可以将这些页面嵌入桌面窗口。它不是要求用户另开浏览器。
 
-把这件事想清楚，控件几乎是自己跳出来的。
+Racket 在这个例子里负责生成问候语。界面将用户输入交给 Racket，Racket 返回结果，再由 JavaScript 更新页面。
 
-## 先问“用户要做什么”
+![Glaze 的按钮事件、类型化 API 与 Racket 后端交互过程](/images/glaze-first-app-flow.svg)
 
-控件不是按长相分类的，是按用户的动作分类的。打开任何一个界面，用户对某一块区域，无非在做下面几件事之一：
+## 安装与创建项目
 
-- 触发一个动作——“我要做某事”
-- 看一条信息——“我要读，不改”
-- 输入文字——“我要打字”
-- 做一个选择——“我要挑”
-- 看一个进度——“现在到哪了”
+使用 Racket 9.0 或更新版本的 CS 实现。在终端运行：
 
-每一类意图，`racket/gui` 都有一个控件类去接。下面这 8 个，合起来覆盖绝大多数界面：
-
-| 用户要做什么 | 用哪个控件 | 关键操作 |
-|---|---|---|
-| 触发动作 | `button%` | 回调里写动作 |
-| 看只读信息 | `message%` | `set-label` 换文字 |
-| 输入文字 | `text-field%` | `get-value` 取串 |
-| 二态开关 | `check-box%` | `get-value` 取布尔 |
-| 互斥单选（选项少） | `radio-box%` | `get-selection` 取序号 |
-| 互斥单选（选项多） | `choice%` | `get-string-selection` 取串 |
-| 看进度 | `gauge%` | `set-value` 推进度 |
-| 自绘或富文本 | `canvas%` | `paint-callback` 里画 |
-
-这张表是后面所有内容的索引。下面逐类拆开，每类给一段能跑的代码。
-
-![gui-widget-decision-tree](/images/gui-widget-decision-tree.svg)
-
-## 触发用 button%，展示用 message%
-
-只要用户要做的是“点一下，让程序干件事”，就用 `button%`。它的语义是触发，不是输入：按下时，构造时传入的回调被调用，事件类型是 `'button`。
-
-```racket
-#lang racket/gui
-;; 点按钮弹一个提示框
-(define f (new frame% [label "button% 示例"] [width 240] [height 80]))
-(new button% [parent f]
- [label "开始"]
- [callback (λ (b e) (message-box "提示" "开始了"))])
-(send f show #t)
+```sh
+racket --version
+raco pkg install --auto glaze
+raco glaze help
+raco glaze init myapp
+cd myapp
+raco glaze doctor --json
 ```
 
-回调 `(λ (b e) ...)` 的两个参数是按钮自身和一个 `control-event%` 事件，绝大多数时候你只关心事件类型，这里就是 `'button`。
+Windows 需要 WebView2 Runtime；macOS 使用 WKWebView，需要图形会话；Linux 需要 GTK 3、WebKitGTK 和图形会话。doctor 用于检查依赖，不等于已经验证窗口可用。具体平台要求以 [Glaze 官方入门指南](https://github.com/turlamai/glaze/blob/master/docs/getting-started.md) 为准；若链接随默认分支变动，可从 [项目仓库](https://github.com/turlamai/glaze) 进入 docs。
 
-反过来，用户只需要看、不需要改的文字或图标，用 `message%`。它是一行静态文本，也可以是位图，或 `'app`、`'caution`、`'stop` 这类内置图标。
+初次创建后先认识三个文件：
 
-```racket
-#lang racket/gui
-;; 按一下按钮，改写 message 的文字
-(define f (new frame% [label "message% 示例"] [width 260] [height 80]))
-(define msg (new message% [parent f] [label "准备就绪"] [auto-resize #t]))
-(new button% [parent f] [label "运行"]
- [callback (λ (b e) (send msg set-label "正在运行"))])
-(send f show #t)
-```
+| 文件 | 用途 |
+|---|---|
+| main.rkt | Racket 业务逻辑、API 定义和启动入口 |
+| public/index.html | 页面结构、样式与交互 |
+| glaze-schema.json | 应用 API 的兼容性基线 |
 
-`message%` 的初始宽度按建时的文字定，事后用 `set-label` 换更长的字会被截断，开了 `auto-resize` 才会跟着撑开。
+## 第一步：编写 Racket 后端
 
-**想让标签可变，就别忘了 `auto-resize`。**
-
-## 文字输入：text-field% 的单行与多行
-
-`text-field%` 是文本输入的主力。它有单行和多行两种形态，靠 `style` 切换。单行模式下用户按回车会触发一次回调，事件类型是 `'text-field-enter`——这正是“输入框里敲回车就提交”的实现位置。
+将 main.rkt 替换为：
 
 ```racket
-#lang racket/gui
-;; 搜索框：回车才触发
-(define f (new frame% [label "text-field% 示例"] [width 320] [height 80]))
-(new text-field% [parent f] [label "搜索"]
- [callback (λ (tf e)
- (when (eq? (send e get-event-type) 'text-field-enter)
- (printf "搜索：~a\n" (send tf get-value))))])
-(send f show #t)
+#lang racket/base
+(require racket/runtime-path glaze)
+(define-runtime-path public "public")
+
+(define-api-routes api
+  [(POST "api/greet")
+   (greet [name GString "World"])
+   (hasheq 'message (string-append "你好，" name "！"))])
+(provide api)
+
+(module+ main
+  (run-app #:public-dir public
+           #:api api
+           #:title "我的第一个应用"))
 ```
 
-把 `style` 换成 `'(multiple)`，同一个类就变成带滚动条的多行输入框，“备注”“描述”这类字段足够了。真要做插入图片、自定义格式的富文本编辑，才需要另起一个 `text%` 编辑器、放进 `editor-canvas%`（`canvas%` 的子类）——那是另一章的事。
+这里定义了一项名为 greet 的操作。name 是字符串参数，默认值为 World；GString 同时描述类型约束与生成的 API 契约。hasheq 创建一个哈希表，返回 message 字段。module+ main 将启动窗口的动作与模块导入分开，因此检查 API 时不必打开窗口。
 
-## 选择类控件：先问能不能多选
+## 第二步：编写页面
 
-选择类控件最容易选错，因为它们长得像。
+将 public/index.html 替换为下面完整文件：
 
-**能不能同时选多个，是 `check-box%` 与 `radio-box%` 的分水岭。**
-
-可以多选、每项独立开关的，用 `check-box%`。它就是一个二态开关，`get-value` 返回布尔值。
-
-```racket
-#lang racket/gui
-;; 勾选状态实时打印
-(define f (new frame% [label "check-box% 示例"] [width 240] [height 80]))
-(new check-box% [parent f] [label "启用日志"]
- [callback (λ (cb e) (printf "日志：~a\n" (send cb get-value)))])
-(send f show #t)
+```html
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>问候应用</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    main { max-width: 480px; margin: auto; }
+    input, button { font: inherit; padding: 8px; }
+    output { display: block; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>问候应用</h1>
+    <label for="name">姓名</label>
+    <input id="name" value="Ada">
+    <button id="greet">打招呼</button>
+    <output id="reply" aria-live="polite"></output>
+  </main>
+  <script src="/glaze/api.js"></script>
+  <script>
+    const nameInput = document.getElementById("name");
+    const button = document.getElementById("greet");
+    const reply = document.getElementById("reply");
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        const result = await glaze.api.greet({
+          name: nameInput.value
+        });
+        reply.textContent = result.message;
+      } catch (error) {
+        reply.textContent = "调用失败：" + error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
 ```
 
-只能多选一时，再看选项的多少和可变性：选项少而固定、都要摆出来，用 `radio-box%`（它的选项创建后不能增删）；选项多、或运行时要增删，用 `choice%`（下拉折叠，省地方，且支持 `append`、`delete`）。两者同框对比：
+HTML 的 id 给元素一个可定位的名字。addEventListener 注册点击回调，await 等待异步 API 返回，textContent 将结果作为文本显示而非 HTML。try/catch/finally 分别处理正常执行、错误以及按钮状态恢复。即使暂时不熟悉 JavaScript，也可以先沿着这条数据路径理解代码。
 
-```racket
-#lang racket/gui
-;; radio-box% 选项全摆出来；choice% 折叠成下拉
-(define f (new frame% [label "单选对比"] [width 300] [height 120]))
-(new radio-box% [parent f] [label "对齐"] [style '(horizontal)]
- [choices '("左" "中" "右")]
- [callback (λ (rb e) (printf "radio 选第 ~a 项\n" (send rb get-selection)))])
-(new choice% [parent f] [label "字号"]
- [choices '("小" "中" "大" "特大" "超大")]
- [callback (λ (c e) (printf "choice 选：~a\n" (send c get-string-selection)))])
-(send f show #t)
+## 第三步：运行和检查
+
+```sh
+raco glaze schema check --json
+raco glaze schema write
+raco glaze schema check --json
+raco glaze dev
 ```
 
-一句话：固定少量选项选 `radio-box%`，可变或大量选项选 `choice%`。
+首次新增 greet 后，检查应能识别契约变化；确认这是有意增加的 API，再更新基线。不要为了通过检查而覆盖不兼容变化。打开窗口后输入 Ada，点击按钮，预期显示“你好，Ada！”。关闭窗口再运行：
 
-## 进度该展示，不是该输入
-
-`gauge%` 是一根进度条，显示一个有界整数（0 到 `range`）的当前值。它最容易被误用，所以单独拎出来讲：它的构造参数里根本没有 `callback`。用户的任何鼠标键盘动作都改不了它，它纯粹是程序向用户输出的指示灯。
-
-```racket
-#lang racket/gui
-;; 每按一次“推进”，进度条 +10
-(define f (new frame% [label "gauge% 示例"] [width 300] [height 80]))
-(define g (new gauge% [parent f] [label "进度"] [range 100]))
-(new button% [parent f] [label "推进"]
- [callback (λ (b e)
- (send g set-value (min 100 (+ (send g get-value) 10))))])
-(send f show #t)
+```sh
+raco glaze verify
+raco glaze build --name myapp
 ```
 
-**`gauge%` 是给用户看的，不是给用户拖的；想让用户设定数值，那是 `slider%`。** 两者长得像，语义正好相反。
+verify 检查原生窗口等基础运行条件，不等于已经验证本章按钮业务功能。build 生成分发产物；真正发布还需要目标平台测试及适用的签名流程。
 
-## 装不下的，用 canvas% 画
+Glaze 的 0.x 文档区分默认 HTTP 适配器与显式 native 传输，两者都在原生 WebView 内运行。不要把本地 API 调用理解为必须访问互联网，也不要假设打包后自动具备跨平台发布资格。
 
-前面 7 个控件长什么样、怎么交互，都是系统定死的。一旦你要画系统没现成的东西——一条曲线、一个棋盘、一段带格式的长文档——就轮到 `canvas%`。它是一块空白绘制窗口，你拿到它的绘图上下文（DC），自己想画什么画什么。
+## 动手练习
 
-```racket
-#lang racket/gui
-;; 在画布上画一条线和圆
-(define f (new frame% [label "canvas% 示例"] [width 260] [height 160]))
-(new canvas% [parent f] [style '(border)]
- [paint-callback
- (λ (c dc)
- (send dc set-pen "firebrick" 3 'solid)
- (send dc draw-line 20 20 220 130)
- (send dc draw-ellipse 70 30 80 80))])
-(send f show #t)
-```
+将默认姓名改为自己的名字，再让后端拒绝空字符串，观察界面如何展示错误。想一想：输入校验应该仅放在页面，还是在 Racket 后端也做一次？
 
-`paint-callback` 的参数是画布自身和 DC：`(λ (c dc) ...)`，每次需要重绘时被调用。`canvas%` 还有个更常用的子类 `editor-canvas%`——把一个 `text%` 编辑器挂上去，就得到一个完整的富文本编辑视图，这正是 DrRacket 编辑器背后的同一套机制。
-
-## 几条会咬人的暗刃
-
-用熟之前，有几处反直觉的地方会偷偷坑你。
-
-**程序里 `set-value`，不会触发回调。**
-
-`text-field%` 的 `set-value`、`check-box%` 的 `set-value`、`radio-box%` 和 `choice%` 的 `set-selection`，文档里都写明“不调用回调”。你想监听变化，只能在用户触发的回调里读；程序自己改了值，回调一声不吭。
-
-还有三条更短的：
-
-- `radio-box%` 的选项创建后不可变，运行时要增删只能换成 `choice%`。
-- `gauge%` 没有回调、不接收输入；可交互地设定数值是 `slider%`。
-- `message%` 默认按初始文字定宽，换长文字会被截断，需要 `auto-resize`。
-
-把这几条记牢，控件选错的概率会掉一个量级。
-
-## 控件是意图的外壳
-
-回到开头的问题：为什么选控件会让人卡住？因为人在按长相挑，而控件是按意图分的。下次面对一个空白面板，别先想“这里放个什么控件好看”，先问“用户对着这块区域要做什么”——答案一出来，8 个类里自然有一个对上号。
-
-> 界面的复杂度不在控件多，而在意图清不清。把用户的动作想明白，控件自己会就位。
-
+下一章将从问候语扩展到任务数据、界面布局和应用状态，继续沿用同一条 API 边界。
