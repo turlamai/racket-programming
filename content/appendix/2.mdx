@@ -10,7 +10,8 @@ Racket 仓库被组织成不同的目录，以分离源代码、标准库、包�
 
 ```text
 racket/racket/
-├── racket/src/                 │   ├── cs/                     # Racket CS (Chez Scheme) 实现
+├── racket/src/
+│   ├── cs/                     # Racket CS (Chez Scheme) 实现
 │   ├── bc/                     # Racket BC (C/字节码) 实现
 │   ├── expander/               # 宏扩展器和模块系统
 │   ├── ChezScheme/             # 嵌入的 Chez Scheme 源代码
@@ -40,9 +41,11 @@ racket/racket/
 └── build.md                    # 官方构建说明
 ```
 
-> **说明**：`Makefile` 实际上是一个封装层，所有构建操作都通过 main.zuo（Zuo 构建系统）执行。你可以直接使用 `zuo .` 命令代替 `make` 来调用相同的构建目标。
+> **说明**：`Makefile` 实际上是一个封装层，所有构建操作都通过 main.zuo（Zuo 构建系统）执行。具体 Zuo 调用方式与构建目标以检出版本的 build.md 为准。
 
 ## 平台准备
+
+先阅读 [官方构建说明](https://github.com/racket/racket/blob/master/build.md)，并记录 Git 提交、操作系统、CPU 架构和编译器版本。本篇命令属于构建流程示意，未在三个平台逐一运行验证。
 
 ### Unix/Linux 系统
 
@@ -74,8 +77,8 @@ xcode-select --install
 
 Windows 的构建稍微复杂一些，需要：
 
-- Microsoft Visual Studio（2008/9.0 到 2022/17.0 版本）
-- 或者使用 Windows Subsystem for Linux (WSL)
+- 按所检出版本 build.md 选择 Visual Studio 的 C/C++ 工具链。
+- WSL 可以构建 Linux 目标，但不能将其产物直接当成 Windows 原生二进制。
 
 ## 快速开始：原地构建（推荐）
 
@@ -89,6 +92,7 @@ Windows 的构建稍微复杂一些，需要：
 git clone https://github.com/racket/racket.git
 cd racket
 
+# 建议先选择要研究的发布标签，并阅读该版本 build.md
 # 开始原地构建
 
 make in-place
@@ -255,7 +259,7 @@ make unix-style PREFIX=/usr/local/racket
 make unix-style PREFIX=/usr/local/racket
 ```
 
-Unix 风格安装会将 Racket 安装到指定目录，构建完成后可以删除源代码目录。
+Unix 风格安装会将 Racket 安装到指定目录，确认目标安装独立完整、没有依赖源码目录的开发链接之后，再决定是否清理源目录。
 
 **注意**：Unix 风格安装在 Windows 上不支持。
 
@@ -341,6 +345,8 @@ make in-place CONFIGURE_ARGS="--enable-pthread"
 ```
 
 ## 构建时间对比
+
+以下仅用于理解不同构建任务的范围，不是实测耗时排名；缓存、硬件、网络和包集合都会影响结果。
 
 不同的构建模式有不同的构建时间：
 
