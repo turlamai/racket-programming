@@ -9,17 +9,20 @@
 你写过这种程序吧——几条配置、一点状态、几张待办事项，程序关掉下次还想留着。最直观的做法是把数据写进文件。Racket 里这件事简单到令人发指：
 
 ```racket
-;; 写进去
-(call-with-output-file "data.txt"
-  (λ (out) (write '(("买牛奶" . #f) ("写代码" . #t)) out)))
-
-;; 读出来
-(call-with-input-file "data.txt"
-  (λ (in) (read in)))
+(require racket/file)
+(define path (make-temporary-file))
+(dynamic-wind
+ void
+ (lambda ()
+   (call-with-output-file path
+     (lambda (out) (write '(("买牛奶" . #f) ("写代码" . #t)) out))
+     #:exists 'truncate)
+   (call-with-input-file path read))
+ (lambda () (delete-file path)))
 ;; => '(("买牛奶" . #f) ("写代码" . #t))
 ```
 
-`write` / `read` 这对函数直接把 Racket 的数据结构序列化进文件——一个列表进、一个列表出，连 JSON 都不用。这就是最原始的持久化：数据即文件。
+`write` / `read` 这对函数直接把 Racket 的数据结构序列化进文件——一个列表进、一个列表出，连 JSON 都不用。临时文件仅用于演示序列化往返，结束后自动删除。实际持久化应选定应用数据路径，考虑写入中断、原子替换和备份。
 
 这套方案在数据量小、结构简单时近乎完美。但某一天你会撞墙：你想知道“哪些任务还没做完”，于是把整个文件读进来，`filter` 一遍，再把结果用掉。数据量一大，每次都全量读进内存，只为了筛那么几条。
 
@@ -79,6 +82,7 @@ INSERT INTO tasks (title, done) VALUES ('学 Racket', 0);
 
 -- 改：把"买牛奶"标记为完成
 UPDATE tasks SET done = 1 WHERE title = '买牛奶';
+-- 如果标题重复，这会更新所有匹配行；实际编辑单条任务通常使用 id
 
 -- 删：删掉所有已完成的任务
 DELETE FROM tasks WHERE done = 1;
@@ -106,8 +110,8 @@ DELETE FROM tasks WHERE done = 1;
 (query-exec conn
   "CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY,
-    title TEXT,
-    done INTEGER DEFAULT 0)")
+    title TEXT NOT NULL,
+    done INTEGER NOT NULL DEFAULT 0 CHECK (done IN (0, 1)))")
 
 (query-exec conn
   "INSERT INTO tasks (title) VALUES (?)" "学 Racket")
@@ -120,7 +124,7 @@ DELETE FROM tasks WHERE done = 1;
 
 注意几件事：没有 `apt install`，没有 `systemctl start`，没有端口号，没有用户密码。上述内存数据库在连接关闭后消失。如果希望跨重启保留数据，可将连接改为 `(sqlite3-connect #:database "app.db" #:mode 'create)`；请勿删除真实数据库。数据库打开时可能还有日志或 WAL 文件，备份应采用 SQLite 支持的一致性备份方式，而非随意复制正在写入的主文件。文件数据库与内存数据库的查询接口相同，但生命周期不同。
 
-这正是 SQLite 为什么适合入门——它去掉了数据库里所有属于“服务”的部分，只留下“能查询”这个核心。你刚才学到的“表”“SQL 四个动词”，在 SQLite 里和在那些重型数据库（PostgreSQL、MySQL）里完全一样。数据库的概念是通用的，SQLite 只是让你用最低成本摸到它。
+这正是 SQLite 为什么适合入门——它去掉了数据库里所有属于“服务”的部分，只留下“能查询”这个核心。你刚才学到的“表”“SQL 四个动词”，在 SQLite 里和在那些重型数据库（PostgreSQL、MySQL）里具有共同的基础概念，但类型、SQL 方言、占位符和并发行为存在差异。数据库的基本概念是通用的，SQLite 只是让你用最低成本摸到它。
 
 从使用体验上倒推它的身份：对刚入门的程序来说，SQLite 是完整的嵌入式关系数据库引擎，而不仅是文件格式。理解了这层身份，新手对数据库的恐惧就没了。
 
@@ -181,6 +185,30 @@ DELETE FROM tasks WHERE done = 1;
 
 预期输出 2。事务不是所有外部副作用的回滚机制，它保护数据库中参与事务的操作。第 55 章的 Loom Taskboard 将事务用于表单提交后的持久化。
 
+## 动手验证：约束与事务回滚
+
+```racket
+#lang racket/base
+(require db rackunit)
+(define conn (sqlite3-connect #:database 'memory))
+(dynamic-wind
+ void
+ (lambda ()
+   (query-exec conn "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL UNIQUE)")
+   (query-exec conn "INSERT INTO tasks (title) VALUES (?)" "it's fine")
+   (check-equal? (query-value conn "SELECT title FROM tasks WHERE title = ?" "it's fine") "it's fine")
+   (check-exn exn:fail:sql?
+     (lambda ()
+       (call-with-transaction conn
+         (lambda ()
+           (query-exec conn "INSERT INTO tasks (title) VALUES (?)" "temporary")
+           (query-exec conn "INSERT INTO tasks (title) VALUES (?)" "it's fine")))))
+   (check-equal? (query-value conn "SELECT COUNT(*) FROM tasks") 1))
+ (lambda () (disconnect conn)))
+```
+
+保存为 database-test.rkt，执行 raco test database-test.rkt，预期三项检查通过。第二次插入已有标题违反 UNIQUE 约束，事务回滚第一次插入的 temporary，但事务开始前的记录仍然存在。此处 UNIQUE 是专门为练习设置的规则，真实任务应用可以允许重复标题。
+
 ## 什么时候该用什么
 
 到这里你有了三种存数据的方式，怎么选？判断标准很简单——看你的数据会不会长大、要不要查询：
@@ -213,6 +241,15 @@ DELETE FROM tasks WHERE done = 1;
 ```
 
 正常输入它能跑。但传入 `it's` 试试——用户输入的单引号把 SQL 拦腰截断，查询直接报错；精心构造的输入甚至能改写这条 SQL 的本意。把拼接改成参数化：SQL 里放 `?` 占位，值作为独立参数另传。
+
+参考答案：
+
+```racket
+(define (find-task conn title)
+  (query-list conn "SELECT title FROM tasks WHERE title = ?" title))
+```
+
+占位符用于数据值，不用于任意 SQL 标识符。动态表名或排序字段需要使用预先限定的合法选择。
 
 改完想一想：为什么占位符不怕引号？SQL 和数据分开放，省掉的到底是哪种麻烦？
 数据存下来了，下一个问题是：怎么让你的程序被别人用上？最普遍的答案就是 Web——下一篇带你用 Racket 从零写一个 Web Server。
