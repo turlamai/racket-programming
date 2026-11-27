@@ -10,13 +10,21 @@
 Racket 源码 → raco exe → 可执行文件 → raco distribute → 可分发目录 → 平台安装器 → 用户安装
 ```
 
-分界线很清楚：**Racket 负责到「可分发目录」为止，让程序在没装 Racket 的机器上也能跑；再往后——安装向导、快捷方式、卸载——是操作系统的事。** 这不是 Racket 偷懒：注册表、.app 包结构、签名校验，每一样都是平台原生规范，跟语言无关。Racket 的选择是把「如何运行」做扎实，「如何安装」交给你平台上的现成工具。
+分界线很清楚：**Racket 负责到「可分发目录」为止，目标是在兼容且满足系统依赖的未安装 Racket 环境中运行；再往后——安装向导、快捷方式、卸载——是操作系统的事。** 这不是 Racket 偷懒：注册表、.app 包结构、签名校验，每一样都是平台原生规范，跟语言无关。Racket 的选择是把「如何运行」做扎实，「如何安装」交给你平台上的现成工具。
 
 ## Windows：Inno Setup
 
 Windows 用户的预期很统一：setup.exe 安装向导、开始菜单快捷方式、控制面板能卸载。推荐用 Inno Setup——免费、稳定、对「目录型应用」支持完善。
 
-先出可分发目录：
+先建立 main.rkt（本章用不依赖桌面的最小入口验证分发链路）：
+
+```racket
+#lang racket/base
+(module+ main
+  (displayln "MyApp is running"))
+```
+
+这个例子是命令行程序。要让安装后双击时显示 GUI，请换成第 28 章的窗口程序，并按目标平台使用相应 GUI 构建模式。先出可分发目录：
 
 ```bash
 raco exe -o myapp.exe main.rkt
@@ -34,13 +42,13 @@ DefaultGroupName=MyApp
 PrivilegesRequired=lowest
 
 [Files]
-Source: "dist\*"; DestDir: "{app}"; Flags: recursesubdirs
+Source: "dist\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\MyApp"; Filename: "{app}\myapp.exe"
+Name: "{group}\MyApp"; Filename: "{app}\bin\myapp.exe"
 ```
 
-先检查 dist 中实际的可执行文件路径，再编译脚本。生成安装器之后，还要验证干净环境中的安装、运行、卸载与升级。
+脚本假定入口位于 dist/bin/myapp.exe；先查看实际发行目录。如果入口位置不同，必须相应修改 Icons 中的 Filename，再编译脚本。不要随意移动可执行文件或库。生成安装器之后，还要验证干净环境中的安装、运行、卸载与升级。
 
 ## macOS：.app 加 dmg
 
@@ -80,6 +88,10 @@ tar xzvf myapp-linux.tar.gz
 阅读 [Taskly](https://github.com/turlamai/taskly) 的 .github/workflows/release.yml 和 shared/spec/UPDATE.md。它使用 Glaze 构建桌面应用，并按平台提供安装包和便携产物。Windows 使用 MSI 等发行形式，macOS 提供 DMG，Linux 提供 AppImage、deb、rpm 等形式；具体已发布资产以对应版本的 Releases 为准。
 
 更新流程还涉及签名清单、版本比较、下载摘要校验与平台安装交接。第 60 章将从真实源码串联这些知识。签名、公证、系统依赖和各平台实际验收不能由一次本机构建替代。
+
+## 发布前的验收
+
+至少在与开发目录隔离的目标系统上检查：安装或解压后能启动；工作目录改变后仍能找到资源；用户数据不写入只读安装目录；卸载不会意外删除用户数据；升级失败有明确恢复路径。不同 CPU 架构与操作系统分别构建和验证。不要在真实用户数据上测试升级失败场景。
 
 ## 三条线一张表
 
