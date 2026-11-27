@@ -38,11 +38,11 @@
 
 `print` 给列表前面加了 `'`，另外两个没有。这就是你在 REPL 里看到那个多余引号的来源。
 
-**`display` 吐的是字符，`write` 吐的是能被 `read` 读回来的代码，`print` 是 REPL 自己的那一套。**
+**`display` 吐的是字符，write 对支持可读外部表示的值输出可由 read 读取的数据，`print` 是 REPL 自己的那一套。**
 
 ## display：把字符原样吐出来
 
-`display` 只服务一种读者：人。它的原则是“字符串、字符这些按字符显示的数据，原样输出”——字符串不加引号，字符不加 `#\` 前缀，换行就是真换行。
+display 常用于面向人的文本输出。它的原则是“字符串、字符这些按字符显示的数据，原样输出”——字符串不加引号，字符不加 `#\` 前缀，换行就是真换行。
 
 ```racket
 (display "价格：")
@@ -50,7 +50,7 @@
 ;; 价格：100
 ```
 
-给人看的提示语通常适合用 display；日志中的结构化值也可以使用 write 或其他格式，它不会自作主张加引号或转义。
+给人看的提示语通常适合用 display；日志中的结构化值也可以使用 write 或其他格式；display 与 write 的引号和转义规则不同。
 
 ## write：让 read 能把它读回来
 
@@ -70,7 +70,7 @@
 
 `print` 是三个里最特殊的。官方文档说得很直白：`display` 和 `write` 各有固定输出约定，`print` 没有约定，环境可以随便改它的输出。REPL 就是用 `print` 来显示你求值的每个结果。
 
-`print` 的默认行为接近 `write`，但 Racket 的模块和 REPL 默认开启了 `print-as-expression`：表达式模式下，打印一个值要让它读回来还是那个值。于是列表前面要加 `'`（否则读回来是对 `1` 的调用），符号前面也加 `'`：
+`print` 的默认行为接近 `write`，但 Racket 的模块和 REPL 默认开启了 `print-as-expression`：表达式模式尝试输出求值后能构造相应值的表达式；read 本身并不求值。于是列表前面要加 `'`（否则读回来是对 `1` 的调用），符号前面也加 `'`：
 
 ```racket
 (print '(1 2 3)) ; '(1 2 3)
@@ -133,6 +133,30 @@ REPL 的求值结果通常由当前打印处理器显示；程序自身仍可调
 ```
 
 `printf` 本质就是 `(fprintf (current-output-port) ...)`。`current-output-port` 是个参数，`display`、`write`、`print`、`printf` 不指定端口时都往这里写。想把整个程序的输出重定向到文件或字符串，`parameterize` 改它一处就够。
+
+## 实验：让数据真正往返一次
+
+保存为 print-test.rkt：
+
+```racket
+#lang racket
+(require rackunit)
+
+(define original (list "a\nb" 'ready 1/3 #t))
+(define encoded
+  (with-output-to-string
+    (lambda () (write original))))
+(define decoded
+  (call-with-input-string encoded read))
+
+(check-equal? decoded original)
+(check-equal? (format "~a" "hi") "hi")
+(check-equal? (format "~s" "hi") "\"hi\"")
+(check-equal? (format "~a" #\A) "A")
+(check-equal? (format "~s" #\A) "#\\A")
+```
+
+运行 `raco test print-test.rkt`，预期五项检查通过。这里比较的是读回的数据值，不是对象身份，也不是执行打印后的代码。不要对来源不明的字符串调用 eval。对于外部输入，还应限制读取规模并验证数据形状。
 
 ## 怎么选
 
