@@ -36,6 +36,9 @@ jobs:
       - name: Parse every Racket code block
         run: npm run check:racket
 
+      - name: Execute selected textbook regression examples
+        run: node scripts/check-book-examples.js
+
       - name: Run Web examples smoke test
         run: racket tests/web-smoke.rkt
 
