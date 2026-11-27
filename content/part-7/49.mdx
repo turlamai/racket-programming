@@ -2,7 +2,7 @@
 
 > `raco exe` 给你一个可执行文件，但普通用户要的是双击安装的体验——这篇拆解从可执行文件到 Windows、macOS、Linux 原生安装包的跨平台分发全流程。
 
-上一章你把包发布进了官方目录——那是给会装包的人准备的。可你把程序发给朋友或者同事试试：他们不装 Racket，也不想敲命令行，他们要的是双击安装、开始菜单里有图标、不要了能卸载。这一步，`raco` 只负责一半。
+上一章学习了如何将包登记到公共目录——那是给会装包的人准备的。可你把程序发给朋友或者同事试试：他们不装 Racket，也不想敲命令行，他们要的是双击安装、开始菜单里有图标、不要了能卸载。这一步，`raco` 只负责一半。
 
 先把整条链路摆出来：
 
@@ -19,8 +19,8 @@ Windows 用户的预期很统一：setup.exe 安装向导、开始菜单快捷�
 先出可分发目录：
 
 ```bash
-raco exe main.rkt
-raco distribute dist myapp
+raco exe -o myapp.exe main.rkt
+raco distribute dist myapp.exe
 ```
 
 然后写一份最小的 Inno Setup 脚本：
@@ -28,7 +28,10 @@ raco distribute dist myapp
 ```iss
 [Setup]
 AppName=MyApp
-DefaultDirName={pf}\MyApp
+AppVersion=0.1.0
+DefaultDirName={localappdata}\MyApp
+DefaultGroupName=MyApp
+PrivilegesRequired=lowest
 
 [Files]
 Source: "dist\*"; DestDir: "{app}"; Flags: recursesubdirs
@@ -37,7 +40,7 @@ Source: "dist\*"; DestDir: "{app}"; Flags: recursesubdirs
 Name: "{group}\MyApp"; Filename: "{app}\myapp.exe"
 ```
 
-编译脚本，得到 setup.exe——Windows 这条线就走完了。
+先检查 dist 中实际的可执行文件路径，再编译脚本。生成安装器之后，还要验证干净环境中的安装、运行、卸载与升级。
 
 ## macOS：.app 加 dmg
 
@@ -51,24 +54,32 @@ MyApp.app/
  └─ Info.plist # 应用元数据
 ```
 
-流程三步：把 `raco distribute` 的输出放进 `Contents/MacOS`，补上 `Info.plist`，再用工具打成 dmg 镜像，用户拖拽安装。两个顺手的工具：`create-dmg` 生成镜像，`codesign` 做基础代码签名；要分发给外面的人，再加 `gon` 走公证流程。
+不要随意搬动发行目录内部文件，否则可能破坏相对路径和动态库加载。GUI 应用优先使用 raco exe 的 GUI 模式或 Glaze 的应用构建入口生成适当的应用结构。公开分发时按 Apple 当前要求进行 Developer ID 签名、公证及验证；DMG 只是交付容器，不等于签名或公证。
 
 ## Linux：解压即用
 
 Linux 用户对「安装」的预期本来就不一样，最简单的方式反而最地道：
 
 ```bash
+raco exe -o myapp main.rkt
+raco distribute dist myapp
 tar czvf myapp-linux.tar.gz dist/
 ```
 
-用户侧解压就能跑：
+用户侧解压后，先确认发行目录中的实际入口路径及目标系统依赖，再运行（下面以 bin/myapp 为例）：
 
 ```bash
 tar xzvf myapp-linux.tar.gz
-./dist/myapp
+./dist/bin/myapp
 ```
 
 想再进一步，AppImage 做单文件分发；deb/rpm 要学各家的打包规范；Flatpak 带沙箱化部署——都看你愿意为分发投入多少。
+
+## 真实项目：Taskly 的发行流程
+
+阅读 [Taskly](https://github.com/turlamai/taskly) 的 .github/workflows/release.yml 和 shared/spec/UPDATE.md。它使用 Glaze 构建桌面应用，并按平台提供安装包和便携产物。Windows 使用 MSI 等发行形式，macOS 提供 DMG，Linux 提供 AppImage、deb、rpm 等形式；具体已发布资产以对应版本的 Releases 为准。
+
+更新流程还涉及签名清单、版本比较、下载摘要校验与平台安装交接。第 60 章将从真实源码串联这些知识。签名、公证、系统依赖和各平台实际验收不能由一次本机构建替代。
 
 ## 三条线一张表
 
@@ -78,4 +89,4 @@ tar xzvf myapp-linux.tar.gz
 | macOS | app+dmg | .dmg | 拖拽安装 |
 | Linux | tar.gz | .tar.gz | 解压即用 |
 
-最后记住那句话就够了：**Racket 解决「如何运行」，平台工具解决「如何安装」。** 先确认 `raco distribute` 出来的目录能独立运行，再挑各平台最省事的安装方案；签名、自动更新这些高级特性，留到有真实用户之后再说。Inno Setup 的脚本写法、macOS 的签名与公证、Linux 的打包规范，每一项都值得单独深挖——但那是分发这一层的下一层，不在语言这一层。
+最后记住那句话就够了：**Racket 解决「如何运行」，平台工具解决「如何安装」。** 先确认 `raco distribute` 出来的目录能独立运行，再挑各平台最省事的安装方案；公开分发前应考虑签名、更新可信性与失败恢复，而不是等用户遇到问题后才补做。Inno Setup 的脚本写法、macOS 的签名与公证、Linux 的打包规范，每一项都值得单独深挖——但那是分发这一层的下一层，不在语言这一层。
