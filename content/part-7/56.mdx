@@ -1,6 +1,6 @@
 # 稳定上线——给 Racket Web 程序配好 Nginx
 
-> 写好的 Racket Web 程序怎么对外服务？答案分两层：Racket 在本机一个端口上稳定响应 HTTP，剩下的——HTTPS、反向代理、静态资源、进程守护——全部交给 Nginx。这篇把这条最省心的部署路线完整走一遍。
+> 写好的 Racket Web 程序怎么对外服务？答案分两层：Racket 在本机一个端口上稳定响应 HTTP，剩下的——HTTPS、反向代理、静态资源可以交给 Nginx，而进程守护由 systemd 等服务管理器负责。这篇把这条最省心的部署路线完整走一遍。
 
 不假设你熟悉运维，只假设你已经：
 
@@ -32,6 +32,8 @@ racket main.rkt
 - 作为对外的 Web 入口（80 / 443）
 - 处理 HTTPS、反向代理、静态资源
 - 把请求转发给后端的 Racket 程序
+
+以下是通用部署模型，不是 Loom 开发预览示例的生产上线指南。Loom 示例默认端口为 8080；本章独立示例使用 8000。
 
 经典结构如下：
 
@@ -73,7 +75,7 @@ racket main.rkt
 
 **几个关键点：**
 
-- `127.0.0.1`：只允许本机访问（安全）
+- `127.0.0.1`：只监听本机回环地址，减少直接暴露，但不能替代认证、授权和应用安全
 - 固定端口：便于 Nginx 转发
 - 不自动打开浏览器
 
@@ -174,11 +176,11 @@ Certbot 会：
 - 配置证书路径
 - 设置 HTTP → HTTPS 跳转
 
-你不需要改 Racket 程序任何代码。
+还需检查应用是否正确处理 HTTPS 外部地址、Secure cookie 与可信代理头。证书签发需要域名及相应验证条件。
 
 ## 静态资源交给 Nginx
 
-**不要让 Racket 去处理 CSS / JS / 图片。**
+静态资源可由 Racket、Nginx 或 CDN 提供；按部署需求选择。下面演示 Nginx 静态目录。
 
 ### 项目结构示例
 
@@ -236,19 +238,23 @@ Description=Racket Web Application
 After=network.target
 
 [Service]
-User=www-data
-WorkingDirectory=/home/user/app
-ExecStart=/usr/bin/racket main.rkt
-Restart=always
+User=racketapp
+WorkingDirectory=/opt/racket-app
+ExecStart=/usr/bin/racket /opt/racket-app/main.rkt
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target
 ```
 
+先由管理员创建专用低权限账户 racketapp，部署代码到 /opt/racket-app，确认该用户能读取代码并仅能写入指定数据目录。确认 racket 的实际安装路径。以下命令适用于使用 systemd 的 Linux；Nginx 目录布局和 Certbot 安装方式以发行版为准。
+
 启动服务：
 
 ```bash
-sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
 sudo systemctl enable racket-app
 sudo systemctl start racket-app
 ```
@@ -282,7 +288,7 @@ sudo systemctl start racket-app
 
 > Racket 程序在本机一个端口上 **稳定响应 HTTP**
 
-剩下的，全部交给 Nginx。
+Nginx 不会替应用实现认证、授权、CSRF 防护、数据库备份或业务限额。还需要可信代理头策略、进程管理、日志和监控。
 
 ## 结语
 
