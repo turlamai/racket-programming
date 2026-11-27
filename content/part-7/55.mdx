@@ -113,12 +113,79 @@ curl -i -X POST http://127.0.0.1:8080/tasks/42
 
 当同一个应用还需要桌面版本时，Glaze 和 Rivet 可以采用同样的业务逻辑。不同的是界面和交互入口，而不是任务本身的定义。
 
-## 接下来学什么
+## 从页面进阶到真实任务管理应用
 
-本章仅使用开发版本已提供的路由、HTML 响应和本地服务接口。数据库迁移、表单、会话、认证及实时组件仍属于 Loom 的演进方向，不能把路线图当成已经可用的功能。
+前面的页面只演示路由，尚未保存任务。Loom 仓库现在维护了 [Taskboard 示例](https://github.com/turlamai/loom/tree/HEAD/examples/taskboard)，它把路由、HTML、表单、数据模型、SQLite、会话和 CSRF 防护组合起来。
 
-Racket 还有 Koyo 等 Web 工具包；不同框架解决的工程问题并不完全相同。理解 HTTP、数据模型和函数组合之后，学习其他框架也会容易很多。
+在已安装依赖的 Loom 源码根目录运行：
 
-练习：增加一个 /about 页面，再尝试访问不存在的路径。思考如何将任务数据从处理函数中分离出来，使相同的数据逻辑能独立运行和测试。
+```sh
+racket examples/taskboard/app.rkt
+```
 
-下一章讲解服务器如何通过 Nginx 对外提供服务。那是通用部署知识，不意味着当前 Loom 开发版本已经具备生产上线条件。
+先停止前面的 8080 端口服务，再访问 http://127.0.0.1:8080/。输入一个任务标题，点击 Add，再试着 Toggle 和 Delete。关闭并重新启动服务，观察数据是否还在。
+
+默认数据库文件为 taskboard.db。练习时建议使用独立数据库文件，环境变量 LOOM_TASKBOARD_DB 可以指定其位置，LOOM_TASKBOARD_PORT 可以调整端口。不要删除已有业务数据来重置练习环境。
+
+## HTML 表单如何发起修改
+
+浏览器中的表单包含输入框与提交按钮。点击提交时，浏览器根据表单指定的方法与地址发起 HTTP 请求。例如，Taskboard 通过 POST /tasks 添加任务。
+
+GET 用于读取页面，POST 用于提交改变业务状态的请求。HTTP 方法并不会自动阻止程序错误地修改状态，因此应用仍须遵守安全方法的语义。
+
+![Loom Taskboard 的表单提交、数据库事务和重新读取流程](/images/loom-taskboard-flow.svg)
+
+实际示例使用下面的路由表（摘自 app.rkt，需要原模块中的处理函数和中间件定义）：
+
+```racket
+(make-app
+ (list (route #"GET" "/" home)
+       (route #"POST" "/tasks" create)
+       (route #"POST" "/tasks/:id/toggle" (change #f))
+       (route #"POST" "/tasks/:id/delete" (change #t)))
+ #:middleware
+ (list security-headers
+       (form-csrf-protection store #:secure? #f #:max-bytes 4096)))
+```
+
+中间件是包在处理函数外面的另一层函数：它可以在调用内部处理函数之前验证请求，也可以在返回响应时补充响应头。本例的非 Secure cookie 设置仅适用于 localhost HTTP 演示。
+
+## 数据模型与持久化
+
+Taskboard 在后端声明了任务模型和仓库：
+
+```racket
+(define-model task
+  [id string #t]
+  [title string #t]
+  [done boolean #t])
+
+(define tasks
+  (make-repository task #:table 'tasks #:key 'id))
+```
+
+这段代码依赖 loom/model 和 loom/repository。模型中的 #t 表示必填字段。仓库将显式模型映射到已有的 SQLite 表，它不自动创建表，也不替代授权检查。真实示例使用 loom/migrate 创建表，使用参数化查询与事务保存修改。
+
+一次创建任务会先读取已验证的表单字段，再检查标题是否为 1 至 200 个字符，之后生成随机 ID，插入新记录并返回重定向。事务成功结束后，浏览器重新读取首页。这种模式通常称为 POST/Redirect/GET，有助于避免刷新页面时重复提交表单，但不等于服务端已经实现幂等性。
+
+## 为什么还需要会话和 CSRF
+
+HTTP 不要求每次请求自动继承此前请求的上下文。Cookie 可以让浏览器在后续请求携带一个标识，服务器通过该标识查询会话状态。
+
+CSRF（跨站请求伪造）指第三方页面诱导浏览器向目标网站发送带有用户凭据的请求。Taskboard 为浏览器会话关联随机令牌，表单提交时由中间件验证令牌是否正确。仅检查请求是 POST 并不能防止这种问题。
+
+本例提供独立浏览器会话和 CSRF 令牌，但任务数据库仍是共享的。它没有实现用户认证、按用户隔离数据或完整授权机制；会话也保存在进程内，重启会失效。不要直接将它公开部署为多用户服务。
+
+## 验收
+
+在 Linux 环境中安装 curl 和 Python 3 后，从 Loom 源码根目录执行：
+
+```sh
+bash examples/taskboard/smoke.sh
+```
+
+这是 Loom 仓库现有的 HTTP 验收入口。除此以外，还应手动检查添加、完成、删除、重启恢复以及非法表单被拒绝的情况。
+
+练习：对照第 31、33 章的桌面任务管理器，指出三种应用中哪些规则属于纯 Racket 业务逻辑，哪些属于界面或协议边界。三个官方示例并非共享同一个源文件或相同的数据格式。
+
+下一章介绍通用的反向代理和进程管理知识，并不意味着 Loom 开发预览版已经满足生产部署条件。
