@@ -1,105 +1,120 @@
-# 如何构建和运行 ActivityLog2
+# Taskly——从源码到完整桌面产品
 
-> 一个真实的、有实际功能的开源 Racket 桌面应用长什么样？ActivityLog2 是最好的答案——这篇带你把它从源码构建到跑起来。
+> 前面已经学习数据、函数、模块、GUI、数据库和打包。本章阅读真实任务管理应用 Taskly 的源码，将这些知识组合起来，而不是再学习一组孤立的 API。
 
-[ActivityLog2](https://github.com/alex-hhh/ActivityLog2) 是一个基于 Racket 的开源原生桌面 GUI 工程——前面学的 GUI、数据库、工程化，在它身上全能用得上。这篇带你把它从源码构建到跑起来。
+Taskly 是一个本地优先的任务管理应用。添加任务、完成任务、设置日期和保存数据都是容易理解的需求。它的工程实现则涉及共享 Racket 核心、桌面窗口、CLI、接口契约和跨平台分发。
 
-## 构建和运行概览
+本章依据 [Taskly 仓库](https://github.com/turlamai/taskly) 当前源码编写。项目采用 BUSL-1.1 源码可见许可证，并非所有版本均可按 MIT 条款使用；复制、修改或部署前应阅读对应版本的 LICENSE。它目前是开发预览，移动端、独立打包 CLI 和操作系统提醒交付仍有缺口。
 
-ActivityLog2 依赖若干额外的 Racket 包。官方版本会将这些依赖放在项目的 `pkgs` 子目录下并纳入版本控制。在构建或运行应用程序之前，需要先安装这些包。安装完成后，这些包对所有 Racket 程序都可用（Racket 不支持包的虚拟环境）。
+## 从一个用户动作开始
 
-你可以选择两种安装方式：
+想象用户输入“买牛奶”，按下回车。界面收到文字，将它交给后端；后端校验文字、确定任务所属列表，写入数据库，再把保存后的记录交还界面。
 
-1. **使用项目自带的依赖包**（推荐方式，保证与 ActivityLog2 版本兼容）。
-2. **从 Racket 官方包目录安装**：`tzinfo`、`tzgeolookup`、`data-frame`、`plot-container`、`gui-widget-mixins`、`map-widget`，以及测试所需的 `al2-test-runner`。
+![Taskly 从界面或 CLI 到共享 Racket 业务逻辑与 SQLite 的路径](/images/taskly-product-architecture.svg)
 
->
-> 这种方式可能导致版本不一致，从而引发兼容性问题。
+为什么不把全部操作写进按钮回调？因为 CLI 也需要添加任务，未来的其他界面也可能需要同样的功能。如果每个入口各写一次验证和保存规则，很容易出现行为不一致。将规则集中在业务服务中，就可以单独测试并供不同入口复用。
 
-## 克隆仓库
+## 先读目录，不必一次看完所有源码
 
-克隆 ActivityLog2 仓库：
+从仓库根目录按下面顺序阅读：
 
-```bash
-git clone https://github.com/alex-hhh/ActivityLog2.git
-cd ActivityLog2
+| 路径 | 职责 | 对应本书知识 |
+|---|---|---|
+| racket/taskly/model.rkt | 任务、列表、子任务记录 | 第 9 章结构体 |
+| racket/taskly/validation.rkt | 输入校验 | 第 10、23 章函数与异常 |
+| racket/taskly/service.rkt | 业务服务 | 第 25、26 章状态 |
+| racket/taskly/db.rkt | SQLite 访问 | 第 52 章数据库 |
+| racket/taskly/cli.rkt | 命令行入口 | 第 43、44 章输出与执行 |
+| racket/taskly/backend.rkt | 类型化后端操作 | 第 32、33 章 Rivet |
+| backend/main.rkt | Glaze 路由与桌面宿主适配 | 第 30、31 章 Glaze |
+| racket/tests/core-test.rkt | 业务回归测试 | 第 45、47 章测试 |
+| shared/spec/ | 产品、数据、CLI、更新契约 | 第 51 章工程规范 |
+
+不必在第一次阅读时深入每个传输字段或操作系统接口。先追踪一条用户操作，再逐渐扩大范围。
+
+## 第一步：认识数据模型
+
+model.rkt 使用 Racket 的 struct 定义任务记录，包括标识、所属列表、文本、日期时间、完成状态、备注、优先级、标签、子任务和 URL。可选字段在核心中以 #f 表示，适配层再将它转换为目标协议的数据形式。
+
+例如，源码中的 subtask 是一个包含 text 和 done 两个字段的透明结构体。它与第 9 章学习的结构体完全是同一种机制。透明结构体并不自动校验字段；真实规则由 validation.rkt 等模块保证。
+
+## 第二步：追踪业务规则
+
+在 service.rkt 搜索 service-add-task!。这个函数接受 service、任务文字以及可选的列表、日期、时间和备注，依次完成：
+
+1. 调用 validate-task-text! 校验文字，拒绝空白及超长输入，并返回去掉首尾空白的文字。
+2. 选择任务所属列表并检查它存在。
+3. 构造 task-item 记录。
+4. 调用 db-add-task! 写入数据库。
+5. 根据返回的 ID 重新读取已保存任务。
+
+这一过程将界面输入变成业务数据。validate-task-text! 不依赖窗口，因此可以在不启动 GUI 的环境中测试。
+
+再查找 service-set-completed!。它检查 completed? 是否为布尔值，修改指定 ID 的记录，找不到任务时报告错误。使用 ID 而不是标题定位记录，可以区分名称相同的任务。
+
+## 第三步：先运行测试
+
+安装 Racket CS 9.3 或更新的适用版本与 Git。打开终端：
+
+```sh
+git clone https://github.com/turlamai/taskly.git
+cd taskly
+raco pkg install --auto --no-docs https://github.com/turlamai/rivet.git
+raco test racket/tests/core-test.rkt
 ```
 
-## 设置包目录
+以上依赖安装依据仓库 README；请优先使用所检出版本的构建说明。测试文件使用临时目录并注入固定时钟，避免真实任务数据和当前日期影响结果。阅读 core-test.rkt 中的 validate-task-text!、service-add-task!、service-update-task-text! 和 service-set-completed! 检查，理解 RackUnit 如何固定业务行为。
 
-将项目自带的 `pkgs/` 子目录加入 Racket 的包目录。使用以下命令（Windows 下也可通过 Git Bash 执行）：
+完整核心测试入口为：
 
-```bash
-bash etc/scripts/setup-catalog.sh pkgs/
+```sh
+raco test racket/
 ```
 
-此命令会在 `pkgs/` 目录下创建一个 Racket 包目录索引，并将其添加到 Racket 的包目录配置中，使得后续的 `raco pkg install` 能够找到项目自带的包。
+本章提供复现步骤，不代表本书编写环境已经实际执行这些测试。
 
-## 安装依赖项
+## 第四步：理解界面与 CLI 的边界
 
-包目录设置完成后，安装依赖：
+当前 Taskly 在三个桌面平台使用 Glaze 的共享 Web 界面，运行在系统 WebView 中，而不是分别维护三个 Rivet 原生界面。Rivet 提供类型化 RPC 契约；backend/main.rkt 将 Glaze 路由通过 RVT1 适配到 Racket 引擎。CLI 则使用同一业务核心。共享契约有助于保持不同入口的行为一致，但仍需各自的验收测试。
 
-```bash
-raco pkg install --auto al2-dependencies
+先阅读 shared/spec/CLI-SPEC.md，再查看命令帮助：
+
+```sh
+racket racket/taskly/cli.rkt --help
 ```
 
-## 运行应用程序
+进行写入练习前先建立隔离数据库和配置环境，并按该版本 CLI 文档显式选择它。不要让示例命令修改自己的日常任务数据库。CLI 当前可从源码运行，不保证已作为独立二进制随每个桌面安装包分发。
 
-依赖安装完成后，你有以下几种方式运行 ActivityLog2：
+## 第五步：构建真实窗口
 
-1. **直接运行 Racket 脚本**：
+除了 Racket，还需要 Node 22、pnpm 以及本机 Glaze 所需的 WebView 依赖。按仓库 README，在源码目录执行（以下为 Unix shell 写法）：
 
-```bash
-racket run.rkt
+```sh
+raco pkg install --auto --no-docs https://github.com/turlamai/glaze.git
+pnpm install
+pnpm check
+pnpm build
+racket backend/main.rkt
 ```
 
-2. **在 DrRacket 中运行**：打开 `run.rkt` 文件并点击 “ 运行 ”。
+启动后在界面选择一个专门的练习数据库，添加、编辑、完成任务，关闭并重启，确认数据恢复。若原生窗口初始化失败，先检查 Glaze 的 doctor 和平台依赖，而不是把浏览器页面当作桌面验收结果。
 
-运行时也可以指定数据库文件作为参数：
+## 第六步：从开发版本到安装产物
 
-```bash
-racket run.rkt /path/to/database.sqlite
+依据仓库当前构建入口：
+
+```sh
+raco glaze build --entry backend/main.rkt --name Taskly \
+  --version "$(cat VERSION)" --identifier app.taskly.Taskly --out dist
+racket scripts/acceptance/run-suites.rkt
 ```
 
-## 构建可执行文件
+Windows 用户可用 PowerShell 的 Get-Content VERSION 取得版本号，并参考仓库对应平台的 CI 命令。构建一个平台的产物不能证明另外两个平台通过。阅读 .github/workflows/ci.yml、acceptance.yml、release.yml，观察源码检查、真实窗口验收和发行流程如何分工。
 
-如果需要生成独立应用：
+更新也是产品的一部分：shared/spec/UPDATE.md 描述版本选择、签名清单、下载校验及平台安装交接。签名验证与摘要校验不能互相替代，更新失败时也应保留可用版本。操作系统签名、公证与实际发布资产的可信状态需要独立核实。不要关闭系统安全保护来绕过安装问题。
 
-```bash
-racket build.rkt
-```
+## 最后的练习：独立完成一条需求
 
-此命令会执行以下操作：
-1. 编译 .zo 文件
-2. 构建应用程序可执行文件
-3. 将可执行文件打包到 `dist` 目录
+例如给任务标题校验增加一组边界测试。先阅读 validation.rkt 中现有的长度限制，再写测试验证空白、正常输入及超限输入。运行核心测试，不修改真实用户数据库。若确实需要改变产品行为，先同步相关规格，再修改业务逻辑与界面。
 
-生成的可执行文件包括：
-
-| 可执行文件 | 用途 |
-|-----------|------|
-| `ActivityLog2.exe` (Windows) / `ActivityLog2` ( 其他平台 ) | 主应用程序 |
-| `AL2-Climb-Analysis.exe` (Windows) / `AL2-Climb-Analysis` ( 其他平台 ) | 攀爬分析工具 |
-| `AL2-Activity-Import.exe` (Windows) / `AL2-Activity-Import` ( 其他平台 ) | 活动导入工具 |
-
-这些独立应用可在未安装 Racket 的环境下运行。
-
-## 生成安装程序（仅 Windows）
-
-在 Windows 平台上，如果安装了 Inno Setup，可以生成安装程序。在 `build.rkt` 中提供了 `mkinstaller` 函数，但默认的构建流程不会调用它。要生成安装程序，需要在 Racket 中手动调用：
-
-```bash
- racket -e "(require \"build.rkt\") (mkinstaller)"
-```
-
-或者在 DrRacket 中打开 `build.rkt` 并调用 `(mkinstaller)` 函数。
-
-安装程序会在 `dist` 目录下生成，版本号会根据 `version.txt` 中的内容自动添加。如果在 Azure 构建环境中，还会附加构建 ID。
-
-## 总结
-
-- 项目自带依赖包在 `pkgs/` 目录下，推荐使用它们以确保兼容性
-- 使用 `setup-catalog.sh` 设置包目录后，通过 `raco pkg install --auto al2-dependencies` 安装
-- 使用 `racket run.rkt` 运行应用程序
-- 使用 `racket build.rkt` 构建独立可执行文件
-- Windows 平台可通过调用 `mkinstaller` 函数生成 Inno Setup 安装程序
+这本书到这里将学习内容串在一起：用数据表达问题，用函数描述规则，用模块建立边界，用界面和协议连接用户，用测试保证预期，用构建与分发交付软件。Taskly 只是一个可以继续研究的真实案例；这些工程方法也适用于自己的其他 Racket 项目。
