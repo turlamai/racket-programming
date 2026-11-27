@@ -15,7 +15,7 @@
 ;; 1 2 3 三个值，不是一个列表
 ```
 
-**`values` 不是在构造数据结构，它就是同时吐出多个值。** 于是函数可以这样写——把一个点拆成两个坐标：
+**`values` 不是在构造数据结构，它就是在一次返回中提供多个值，并不意味着并行执行。** 于是函数可以这样写——把一个点拆成两个坐标：
 
 ```racket
 (define (split-point p)
@@ -107,7 +107,7 @@ width
 
 区别在语义。列表表示“一个聚合的数据结构”——一个东西，里面装了好几份；多返回值表示“几个并列的结果”——就是好几个东西。前者在语义上产生一个容器，后者在语义上产生多个结果；实际分配与优化取决于实现。
 
-更实际的是接口的清晰度。返回 list 的函数，调用者可能拿去当普通列表到处传；返回多值的函数，调用者必须显式用 `let-values` 或 `define-values` 接住——**不会被悄悄当成一个值塞进别的表达式。** 这也是 Racket 标准库大量 API 选择多返回值的原因：`quotient/remainder` 同时给商和余数，`partition` 把列表一分为二。
+更实际的是接口的清晰度。返回 list 的函数，调用者可能拿去当普通列表到处传；返回多值的函数，调用者需要使用能够接受对应数量结果的上下文，例如 let-values、define-values 或 call-with-values——**不会被悄悄当成一个值塞进别的表达式。** 这也是 Racket 标准库大量 API 选择多返回值的原因：`quotient/remainder` 同时给商和余数，`partition` 把列表一分为二。
 
 ## 实战：归一化一个向量
 
@@ -126,6 +126,24 @@ width
 ```
 
 这种“算完顺带带出几个结果”的模式，在解析器、编译器里更常见——`(values ast rest-input)` 把构造好的语法树和剩下的输入一起交还，调用方用 `let-values` 接住，是这类代码的标准姿势。
+
+## 动手练习：商与余数
+
+```racket
+#lang racket
+(require rackunit)
+
+(define (division-summary n d)
+  (let-values ([(q r) (quotient/remainder n d)])
+    (list q r)))
+
+(check-equal? (division-summary 17 5) '(3 2))
+(check-equal? (division-summary 20 5) '(4 0))
+(check-exn exn:fail? (lambda () (division-summary 1 0)))
+(check-equal? (call-with-values (lambda () (values)) list) '())
+```
+
+保存为 multiple-values-test.rkt 并执行 `raco test multiple-values-test.rkt`。这里将多个结果接住后主动构造列表，以便保存。最后一项说明 values 还可以产生零个值，接收方必须允许相应数量的参数。
 
 ## 语法糖的底：call-with-values
 
@@ -147,4 +165,4 @@ width
 
 `call-with-values` 接两个函数：第一个负责产出多个值，第二个负责接收。`let-values` 只是把这个“生产—消费”的骨架藏起来，让你写得像普通 `let`。理解了这层底，就能读懂那些偏底层、偏宏的代码——它们常常直接用 `call-with-values`。
 
-多个值不是 trick，是 Racket 给“并列结果”留的一等座位：它有自己的语法去产生、去接收，不靠任何容器。**下一次看到函数返回两个值，别再想着打包成列表——直接用 `let-values` 接。**
+多个值不是 trick，是 Racket 给“并列结果”留的一等座位：它有自己的语法去产生、去接收，不靠任何容器。**如果接口返回多个值，就使用相应的接收形式；如果需要保存或传递一个聚合对象，列表或结构体仍然合适。**
