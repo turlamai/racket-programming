@@ -16,38 +16,66 @@
 
 ```racket
 #lang racket/gui
-(define f (new frame% [label "后台任务"] [width 320]))
+
+(define owner (make-custodian))
+(define closed? #f)
+
+(define task-frame%
+  (class frame%
+    (super-new)
+    (define/augment (on-close)
+      (set! closed? #t)
+      (custodian-shutdown-all owner)
+      (inner (void) on-close))))
+
+(define f (new task-frame% [label "后台任务"] [width 320]))
 (define p (new vertical-panel% [parent f]))
-(define status (new message% [parent p]
-                    [label "就绪"] [auto-resize #t]))
+(define status
+  (new message% [parent p]
+       [label "就绪"] [auto-resize #t]))
 
 (new button%
      [parent p]
      [label "开始"]
      [callback
-      (lambda (button event)
+      (lambda (button _event)
+        (define es (current-eventspace))
         (send button enable #f)
         (send status set-label "处理中")
-        (define es (current-eventspace))
-        (thread
-         (lambda ()
-           (define result
-             (with-handlers ([exn:fail?
-                              (lambda (e)
-                                (string-append "失败：" (exn-message e)))])
-               (sleep 2)
-               "完成"))
-           (parameterize ([current-eventspace es])
-             (queue-callback
-              (lambda ()
-                (send status set-label result)
-                (send button enable #t)))))))])
+        (parameterize ([current-custodian owner])
+          (thread
+           (lambda ()
+             (define result
+               (with-handlers ([exn:fail?
+                                (lambda (e)
+                                  (string-append
+                                   "失败：" (exn-message e)))])
+                 (sleep 2)
+                 "完成"))
+             (parameterize ([current-eventspace es])
+               (queue-callback
+                (lambda ()
+                  (unless closed?
+                    (send status set-label result)
+                    (send button enable #t)))))))))])
+
 (send f show #t)
 ```
 
-运行 racket responsive.rkt。点击开始后，按钮暂时禁用，模拟任务在后台运行，最后通过 queue-callback 将界面更新排入原来的 eventspace。这里 sleep 只是演示等待，不代表真实的业务计算。
+运行 `racket responsive.rkt`。点击开始后，按钮暂时禁用，模拟任务在后台运行。后台线程不直接操作控件，而通过 queue-callback 将更新提交到原来的 eventspace。sleep 只是模拟等待。
 
-这段代码刻意避免重复启动任务，但没有实现关闭窗口时的取消协议。真正应用应跟踪工作任务的生命周期，避免窗口已销毁后仍提交更新，并在退出时进行资源清理。第 24 章介绍了 Custodian。
+窗口关闭时，on-close 将界面标记为已关闭，并关闭专门管理后台任务的 custodian。已经排入事件队列的回调仍可能执行，因此还需要在真正更新控件之前检查 closed?。这个标志只在界面事件线程内读取和修改。owner 不管理界面本身；这里只管理由示例按钮启动的工作线程。
+
+这里采用的是强制终止策略，适用于可以直接丢弃的模拟等待。数据库写入、文件替换或外部请求等真实任务不能一概如此处理：应先请求协作取消、等待安全提交点，并将强制关闭作为经过设计的最后手段。调用 show #f 隐藏窗口也不等同于用户触发 on-close。
+
+### 手动验收
+
+- 点击开始，界面仍能移动和重绘，按钮暂时禁用。
+- 等待模拟任务完成，文字变成“完成”，按钮恢复。
+- 再次开始后立即关闭窗口，工作线程应被停止，不应继续更新已关闭界面。
+- 临时将 sleep 后的结果替换为 `(error 'worker "test failure")`，确认失败信息能够显示，按钮恢复。
+
+这些步骤需要实际桌面环境验证，不能用仅解析语法的检查替代。
 
 同步 channel 的发送和接收可能阻塞，不应直接在界面回调中等待。GUI 的 yield 可以在等待同步事件时派发其他事件，但会引入重入风险；初学者优先采用后台任务加结果回调的方案。不要将这里的 yield 与第 37 章生成器的 yield 混淆。
 
