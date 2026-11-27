@@ -33,7 +33,7 @@ Racket 有一个更底层的模块写法，叫 `module` 表：
  (printf "~a\n" n)))
 ```
 
-`module` 的第一个参数是模块名，第二个参数是“初始模块路径”，后面才是模块体。你在文件第一行写的 `#lang racket`，本质上就是这条长写法的简写——对于 `#lang racket`，读取器会产生形如 `(module cake racket ...)` 的模块形式，名字由文件名派生。其他 `#lang` 可以使用不同的读取规则，因此不能把所有语言声明理解为简单的文本替换。
+`module` 的第一个参数是模块名，第二个参数是“初始模块路径”，后面才是模块体。对于本例，可以用这种显式 module 形式理解语言声明——对于 `#lang racket`，读取器会产生形如 `(module cake racket ...)` 的模块形式，名字由文件名派生。其他 `#lang` 可以使用不同的读取规则，因此不能把所有语言声明理解为简单的文本替换。
 
 注意那个初始模块路径 `racket`。`module` 表自己不会凭空提供 `define`、`lambda`、`require`，这些语法本身也需要被导入。初始模块路径就是第一个被导进来的模块，它给整个模块搭出一套可用的语法。
 
@@ -63,11 +63,11 @@ Racket 有一个更底层的模块写法，叫 `module` 表：
 `require` 做的事完全不同。它不重新选择文件读取器，而是导入其他模块的绑定，包括值绑定和语法绑定；因此导入宏仍可以扩展当前可用的语法。
 
 ```racket
-#lang racket
+#lang racket/base
 
 (require racket/list)
 ;; remove-duplicates、group-by 等函数现在可用了
-;; 但文件的语言还是 racket，语法一点没变
+;; 但文件仍使用 racket/base 的读取规则
 
 (remove-duplicates '(1 1 2 3 3 3))
 ;; '(1 2 3)
@@ -90,7 +90,7 @@ Racket 有一个更底层的模块写法，叫 `module` 表：
 
 ## `provide` 决定模块对外暴露什么
 
-`require` 能拿进来什么，取决于对方 `provide` 了什么。一个模块默认是完全封闭的——你在里面 `define` 的所有东西，外部一律看不见。想让外部用，必须显式地 `provide` 出去。
+`require` 能拿进来什么，取决于对方 `provide` 了什么。普通 require 只能导入目标模块显式导出的绑定；这是一种接口边界，不应当作安全沙箱。想让外部用，必须显式地 `provide` 出去。
 
 ```racket
 ;; 文件 math-tools.rkt
@@ -126,7 +126,7 @@ Racket 有一个更底层的模块写法，叫 `module` 表：
 
 `all-defined-out` 是图省事，个人脚本里常用；`all-from-out` 用来做“中转站”，把别人模块的导出透传给自己的用户；`rename-out` 用来规避命名冲突，或换个更顺口的名字对外。
 
-**没有 `provide`，模块就是一只黑箱。**
+没有导出的普通绑定不能直接通过 require 获得。
 
 ## `#lang racket/gui` 不等于 `require`
 
@@ -163,7 +163,24 @@ Racket 有一个更底层的模块写法，叫 `module` 表：
  (check-= (drop 10) 490 1e-9))
 ```
 
-命令行跑 `raco test physics.rkt`，只会执行 `test` 子模块里的测试；而别的文件把 `physics.rkt` 当库 `require` 时，测试代码根本不会跑，连加载都不会加载。子模块还可以用 `module*` 声明（子模块能引用外层，外层不能引用子模块），或用嵌套的 `module` 声明（方向相反），但日常 90% 的场景，`module+` 就够了。
+命令行运行 raco test physics.rkt 时会实例化所需的外层模块，再执行 test 子模块；而别的文件把 `physics.rkt` 当库 `require` 时，测试代码根本不会跑，连加载都不会加载。module* 的语言参数为 #f 时可共享外层绑定；显式指定语言的子模块则遵循自己的导入规则。日常编写测试和命令行入口时，module+ 通常足够。
+
+## 单独运行与导入的区别
+
+新建 app.rkt：
+
+```racket
+#lang racket/base
+(provide twice)
+(define (twice n) (* 2 n))
+(module+ main
+  (displayln (twice 21)))
+(module+ test
+  (require rackunit)
+  (check-equal? (twice 21) 42))
+```
+
+运行 racket app.rkt 时，main 子模块打印 42；执行 raco test app.rkt 时运行测试。在另一个同目录文件中 require "app.rkt" 时，可以调用 twice，但不会因此运行 main 或 test。注意外层模块本身的初始化代码仍然会执行，因而不要把启动 GUI 或服务的动作放在库模块的顶层。
 
 ## 三个动作，一个对象
 
