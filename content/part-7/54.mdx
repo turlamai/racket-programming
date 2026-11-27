@@ -48,6 +48,7 @@ Racket 的 Web Server 非常直接地采用了这个模型：
 
 (serve/servlet start
  #:port 8000
+ #:listen-ip "127.0.0.1"
  #:launch-browser? #t)
 ```
 
@@ -68,6 +69,8 @@ Servlet 的处理函数需要返回一个 `can-be-response?`。Racket 默认的 
 - 把 xexpr 序列化为响应体
 
 也就是说，你仍然不用手写 HTTP 报文，但要显式说清楚“这个值怎样成为响应”。
+
+![HTTP 请求与响应的结构及处理边界](/images/racket-http-request-response.svg)
 
 ## 四、Web 返回的不只是“内容”
 
@@ -139,7 +142,7 @@ Web Server 不只服务网页。
 
 ```racket
 (response/output
- #:mime-type #"text/plain"
+ #:mime-type #"text/plain; charset=utf-8"
  (λ (out)
  (display "plain text" out)))
 ```
@@ -147,10 +150,12 @@ Web Server 不只服务网页。
 ### 2 返回结构化数据（例如 JSON）
 
 ```racket
+(require json)
+
 (response/output
  #:mime-type #"application/json"
  (λ (out)
- (display "{\"ok\": true}" out)))
+ (write-json (hasheq 'ok #t) out)))
 ```
 
 Racket 不限制你的返回形式，只要求你 **明确表达意图**。
@@ -159,7 +164,7 @@ Racket 不限制你的返回形式，只要求你 **明确表达意图**。
 
 一个非常重要、却容易被忽略的事实是：
 
-> **在 Racket 中，Web 响应是返回值，而不是副作用。**
+> **处理函数返回响应描述，服务器随后将它写入网络连接。** response/output 的输出过程以及数据库写入等操作仍可能产生副作用。
 
 这意味着你可以像组织普通程序一样组织 Web 逻辑：
 
@@ -183,6 +188,12 @@ Web 开始变得可组合、可抽象、可复用。
 5. 返回不同类型的数据
 
 这不是在“学框架”，而是在 **逐层揭开 Web 的真实结构**。
+
+## 请求并发与应用状态
+
+服务器可能同时处理多个请求，因此不能假定共享变量的读取、修改和写入天然组成原子操作。每个请求独立校验输入；共享状态需要明确的同步与事务边界。HTTP 本身不要求服务端保存此前请求的上下文；应用可通过 Cookie 与会话建立关联。
+
+第 55 章的 Loom Taskboard 将这些概念落实为路由、中间件、表单验证和数据库事务。它是本地教学案例，不具备公开多用户部署所需的完整认证与授权。
 
 ## 结语
 
