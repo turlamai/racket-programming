@@ -259,12 +259,28 @@ HTML 成了表达式的一部分。
            (lambda (_request)
              (html-response
               (page-layout #:title "Welcome"
-                           (welcome "Racket"))))))))
+                           (welcome "Racket")))))))
 
 (serve app)
 ```
 
 需要先按第 55 章安装 Loom 的对应开发版本。保存为 welcome.rkt，执行 `racket welcome.rkt`，访问 http://127.0.0.1:8080/ ，预期显示 Hello, Racket。该示例仍需实际版本运行验证，不代表生产环境配置。
+
+## 动手验证：页面树与文本转义
+
+保存为 xexpr-test.rkt：
+
+```racket
+#lang racket/base
+(require xml rackunit)
+(define (items xs)
+  `(ul ,@(map (lambda (x) `(li ,x)) xs)))
+(check-equal? (items '("A" "B")) '(ul (li "A") (li "B")))
+(check-equal? (xexpr->string '(p "A & B")) "<p>A &amp; B</p>")
+(check-equal? (xexpr->string '(p "<tag>")) "<p>&lt;tag&gt;</p>")
+```
+
+运行 raco test xexpr-test.rkt，预期三项检查通过。这里验证的是结构和序列化；实际浏览器行为及 URL 安全仍要独立检查。
 
 ## 结构化 HTML 不等于完整安全策略
 
@@ -282,4 +298,4 @@ HTML 成了表达式的一部分。
 
 它只是你熟悉的 Racket 世界，在网络上的一次自然延伸。
 
-Web 讲到这里，你已经能用 Racket 写服务、存数据、生成页面、部署上线。下一篇换个方向——当 Racket 自己的能力不够用时，怎么通过 FFI 调用 C 的库，把两门语言的能力拼在一起。
+Web 讲到这里，我们已学习本地服务、数据存储、页面生成及基础部署模型；生产上线仍需要独立安全与运维验收。下一篇换个方向——当 Racket 自己的能力不够用时，怎么通过 FFI 调用 C 的库，把两门语言的能力拼在一起。
