@@ -5,6 +5,15 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const manifest = [
+  [14, 'tail-recursion', ['(define (reverse-tail lst)']],
+  [17, 'multiple-values', ['(define (division-summary n d)']],
+  [19, 'pattern-matching', ['(require rackunit)']],
+  [20, 'lambda-calculus', ['(struct Var (name))', '(define (free-in? name expr)', '(define (step expr)', '(module+ test']],
+  [21, 'fixed-point', ['(module+ test']],
+  [23, 'exceptions', ['(define (safe-divide n d)']],
+  [24, 'custodian', ['(define parent (make-custodian))']],
+  [27, 'class-state', ['(define counter%']],
+  [29, 'task-state', ['(define milk', '(define (reopen t)']],
   [36, 'generator', ['(define g\n  (generator ()']],
   [36, 'dynamic-wind', ["(make-continuation-prompt-tag 'wind-demo)"]],
   [37, 'generator-state', ['(define sample']],
@@ -23,7 +32,7 @@ let failed = 0;
 try {
   for (const [chapter, name, anchors] of manifest) {
     try {
-      const source = path.join(root, 'content', 'part-' + (chapter <= 42 ? 6 : 7), chapter + '.mdx');
+      const source = path.join(root, 'content', 'part-' + (chapter <= 22 ? 3 : chapter <= 26 ? 4 : chapter <= 34 ? 5 : chapter <= 42 ? 6 : 7), chapter + '.mdx');
       const blocks = [...fs.readFileSync(source, 'utf8').matchAll(/^```racket[ \t]*\r?\n([\s\S]*?)^```[ \t]*\r?$/gm)].map(m => m[1]);
       const snippets = anchors.map(anchor => {
         const matches = blocks.filter(b => b.includes(anchor));
