@@ -4,7 +4,7 @@
 
 Taskly 是一个本地优先的任务管理应用。添加任务、完成任务、设置日期和保存数据都是容易理解的需求。它的工程实现则涉及共享 Racket 核心、桌面窗口、CLI、接口契约和跨平台分发。
 
-本章依据 [Taskly 仓库](https://github.com/turlamai/taskly) 当前源码编写。项目采用 BUSL-1.1 源码可见许可证，并非所有版本均可按 MIT 条款使用；复制、修改或部署前应阅读对应版本的 LICENSE。它目前是开发预览，移动端、独立打包 CLI 和操作系统提醒交付仍有缺口。
+本章依据 [Taskly 仓库](https://github.com/turlamai/taskly) 当前源码编写。项目采用 BUSL-1.1 源码可见许可证，不能将源码可见等同于当前版本采用 MIT 条款；复制、修改或部署前应阅读对应版本的 LICENSE。它目前是开发预览，移动端、独立打包 CLI 和操作系统提醒交付仍有缺口。
 
 ## 从一个用户动作开始
 
@@ -42,7 +42,7 @@ model.rkt 使用 Racket 的 struct 定义任务记录，包括标识、所属列
 
 在 service.rkt 搜索 service-add-task!。这个函数接受 service、任务文字以及可选的列表、日期、时间和备注，依次完成：
 
-1. 调用 validate-task-text! 校验文字，拒绝空白及超长输入，并返回去掉首尾空白的文字。
+1. 调用 validate-task-text! 校验文字，拒绝非字符串、空白及超长输入；当前实现先检查原字符串长度不超过 1000 个字符，再返回去掉首尾空白的文字。
 2. 选择任务所属列表并检查它存在。
 3. 构造 task-item 记录。
 4. 调用 db-add-task! 写入数据库。
@@ -72,6 +72,10 @@ raco test racket/
 ```
 
 本章提供复现步骤，不代表本书编写环境已经实际执行这些测试。
+
+### 实际工程中的确定性测试
+
+core-test.rkt 将 current-clock 参数绑定到固定时间，并将 current-taskly-home 指向临时目录。由此测试日期解析时不需要等待真正的明天，也不会修改日常配置。现有测试检查 +1d、+1w 等日历运算以及任务修改后的重新读取。日历日与固定 24 小时的时长不是同一个概念，尤其需要考虑夏令时切换。
 
 ## 第四步：理解界面与 CLI 的边界
 
@@ -111,10 +115,30 @@ racket scripts/acceptance/run-suites.rkt
 
 Windows 用户可用 PowerShell 的 Get-Content VERSION 取得版本号，并参考仓库对应平台的 CI 命令。构建一个平台的产物不能证明另外两个平台通过。阅读 .github/workflows/ci.yml、acceptance.yml、release.yml，观察源码检查、真实窗口验收和发行流程如何分工。
 
-更新也是产品的一部分：shared/spec/UPDATE.md 描述版本选择、签名清单、下载校验及平台安装交接。签名验证与摘要校验不能互相替代，更新失败时也应保留可用版本。操作系统签名、公证与实际发布资产的可信状态需要独立核实。不要关闭系统安全保护来绕过安装问题。
+更新也是产品的一部分：shared/spec/UPDATE.md 描述更新契约。当前 README 明确说明桌面宿主验证签名清单后提示新版本并打开 Releases 页面，下载和安装仍由用户手动完成；不能把规格中的安装交接视为当前已交付的自动安装能力。签名验证与摘要校验不能互相替代，更新失败时也应保留可用版本。操作系统签名、公证与实际发布资产的可信状态需要独立核实。不要关闭系统安全保护来绕过安装问题。
 
 ## 最后的练习：独立完成一条需求
 
-例如给任务标题校验增加一组边界测试。先阅读 validation.rkt 中现有的长度限制，再写测试验证空白、正常输入及超限输入。运行核心测试，不修改真实用户数据库。若确实需要改变产品行为，先同步相关规格，再修改业务逻辑与界面。
+例如给任务标题校验增加一组边界测试。先阅读 validation.rkt 中现有的长度限制，再写测试验证空白、正常输入及超限输入。可以在仓库根目录创建独立的 racket/tests/book-validation-test.rkt（教学练习文件，并非现有源码）：
+
+```racket
+#lang racket/base
+(require rackunit
+         "../taskly/validation.rkt"
+         "../taskly/errors.rkt")
+
+(define limit max-task-text-length)
+(check-equal? (validate-task-text! "  Ada  ") "Ada")
+(check-equal? (validate-task-text! (make-string limit #\a))
+              (make-string limit #\a))
+(check-exn exn:fail:taskly?
+           (lambda () (validate-task-text! (make-string (add1 limit) #\a))))
+(check-exn exn:fail:taskly?
+           (lambda () (validate-task-text! "  ")))
+(check-exn exn:fail:taskly?
+           (lambda () (validate-task-text! 42)))
+```
+
+执行 raco test racket/tests/book-validation-test.rkt，预期五项检查通过。它直接调用真实校验模块，不打开数据库、不启动窗口，也不改变产品行为。运行核心测试，不修改真实用户数据库。若确实需要改变产品行为，先同步相关规格，再修改业务逻辑与界面。
 
 这本书到这里将学习内容串在一起：用数据表达问题，用函数描述规则，用模块建立边界，用界面和协议连接用户，用测试保证预期，用构建与分发交付软件。Taskly 只是一个可以继续研究的真实案例；这些工程方法也适用于自己的其他 Racket 项目。
