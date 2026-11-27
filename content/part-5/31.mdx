@@ -70,11 +70,31 @@ Windows PowerShell 可逐个传入 tests 目录中的 .rkt 文件。verify 检�
      (invalid! "title must be 1-120 characters and not blank"))]
 ```
 
-调用方使用生成的 glaze.api.createTask 方法。GString 检查数据类型，task-add 检查业务规则，两者不能互相替代。
+当前示例的 JavaScript 使用 glaze.api.tasksCreate({ title })；Racket 声明中的过程名 createTask 与生成的客户端方法名并不相同。应以生成客户端和实际页面为准。GString 检查数据类型，task-add 检查业务规则，两者不能互相替代。
 
 ![任务管理应用中界面输入、领域规则、存储与状态更新的边界](/images/taskboard-state-flow.svg)
 
 状态更新由后端集中处理。当前示例用信号量保护读、修改、写入的过程；通过 store 保存任务，并广播新的状态快照。自动保存带有延迟，因此不能把每次成功响应等同于数据已立即写入持久介质。
+
+## 阅读真实的 JavaScript 调用
+
+在 public/app.js 中，表单提交处理器调用 tasksCreate，并在成功后清空输入框。下面摘录核心路径（省略状态提示和焦点操作，依赖原文件中的 els 与 apply）：
+
+```javascript
+try {
+  const snapshot = await glaze.api.tasksCreate({ title });
+  apply(snapshot);
+  els.input.value = '';
+} catch (error) {
+  setStatus(`Could not add the task: ${error.message || error}`, true);
+}
+```
+
+apply(snapshot) 将返回的 tasks 和 stats 保存到页面变量，再调用 render()。页面还通过 glaze.on('tasks-changed', apply) 接收后端广播。初始加载使用 glaze.api.tasks()，勾选使用 tasksToggle，删除使用 tasksDelete，清除已完成任务使用 tasksClearDone。
+
+这里要分清两种名字：Racket 中的过程名和生成的 JavaScript 客户端方法名。后者应从生成的 API 或项目实际源码确认，而不是凭过程名推导。
+
+当前示例在失败时保留添加任务的输入，但勾选框是浏览器先改变 checked 状态再发送请求，失败路径只显示错误，不能因此认为勾选一定会自动回滚。练习：在失败后重新渲染最后确认的快照，或者重新查询后端；同时避免重复提交及过期响应覆盖新状态。多窗口同步也需要验证消息顺序，不能只凭存在广播就断言所有并发场景均一致。
 
 ## 布局与交互
 
@@ -116,6 +136,6 @@ flex 让一行的子元素共享可用空间，gap 指定间距。任务标题�
 
 ## 练习
 
-给开头的纯 Racket 模块增加撤销完成函数并编写测试。然后在官方示例中追踪 toggleTask 的完整路径，找出界面发出请求、后端修改状态、界面重新显示列表的位置。
+给开头的纯 Racket 模块增加撤销完成函数并编写测试。然后在官方示例中追踪 tasksToggle → toggleTask 的完整路径，找出界面发出请求、后端修改状态、界面重新显示列表的位置。
 
 下一章学习 Rivet。业务规则仍是相同的问题，但界面和通信边界会改变。
