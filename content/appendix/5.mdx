@@ -87,9 +87,15 @@
  (set! pressed? #t)
  (send this refresh)]
  [(send e button-up? 'left)
+ (define activate?
+   (and pressed?
+        (<= 0 (send e get-x))
+        (< (send e get-x) (send this get-width))
+        (<= 0 (send e get-y))
+        (< (send e get-y) (send this get-height))))
  (set! pressed? #f)
  (send this refresh)
- (callback)]))))
+ (when activate? (callback))]))))
 
 (new my-button%
  [parent f]
@@ -101,7 +107,7 @@
 
 `button-down?` 和 `button-up?` 分别判断按下与抬起；`get-width`、`get-height` 取控件当前尺寸，让矩形铺满整个画布。`init-field` 把 `label`、`callback` 暴露成创建参数——这一步和你平时写 `(new button% [label ...])` 是一回事，只不过这个按钮是你自己画的。
 
-**自绘控件就是两件事在自己手里：画成什么样、点了之后干什么。** 系统的 `button%` 替你把这两件事做完了；你接管 `canvas%`，是把它俩要回来。
+这个示例仅处理基本鼠标按下与释放，尚未实现完整焦点、键盘、拖出窗口及辅助技术语义。真实按钮优先采用标准控件。 系统的 `button%` 替你把这两件事做完了；你接管 `canvas%`，是把它俩要回来。
 
 ## 想控制大小：min-width 与 on-size
 
@@ -138,7 +144,14 @@ canvas 被缩放时，系统会自动触发一次 `on-paint`——重画本身�
 ```racket
 #lang racket/gui
 
-(define f (new frame% [label "进度条"] [width 250] [height 80]))
+(define tmr #f)
+(define progress-frame%
+  (class frame%
+    (super-new)
+    (define/augment (on-close)
+      (when tmr (send tmr stop))
+      (inner (void) on-close))))
+(define f (new progress-frame% [label "进度条"] [width 250] [height 80]))
 
 (define progress-bar%
  (class canvas%
@@ -154,7 +167,7 @@ canvas 被缩放时，系统会自动触发一次 `on-paint`——重画本身�
  (send dc draw-rectangle 0 0 w h)
  ; 进度：按比例填一条蓝条
  (send dc set-brush "blue" 'solid)
- (send dc draw-rectangle 2 2 (* (- w 4) (/ progress 100)) (- h 4)))
+ (send dc draw-rectangle 2 2 (* (max 0 (- w 4)) (/ progress 100)) (max 0 (- h 4))))
 
  ; 外部入口：设置进度并刷新
  (define/public (set-progress v)
@@ -165,17 +178,19 @@ canvas 被缩放时，系统会自动触发一次 `on-paint`——重画本身�
 
 (define n 0)
 ; 给定 interval 即自动启动定时器，不必再调 start
-(new timer%
- [notify-callback
- (λ ()
- (set! n (+ n 1))
- (send bar set-progress n))]
- [interval 50])
+(set! tmr
+ (new timer%
+  [notify-callback
+   (lambda ()
+     (set! n (min 100 (add1 n)))
+     (send bar set-progress n)
+     (when (= n 100) (send tmr stop)))]) )
+(send tmr start 50)
 
 (send f show #t)
 ```
 
-有一个坑值得点出：`timer%` 在创建时给了 `interval`，它就开始走了——不需要、也不该再补一句 `(send tmr start ...)`。`notify-callback` 是个无参 thunk，每次到点由系统调用。
+timer% 可以通过 interval 自动启动，也可以像本例一样先保存引用，再显式 start。完成或关闭窗口时应 stop，避免继续刷新。50 ms 是调度间隔请求，不是硬实时保证。`notify-callback` 是个无参 thunk，每次到点由系统调用。
 
 **`refresh` 不立即动笔，它只是排队；真正的绘制发生在下一次 `on-paint`。** 连着调多次 `refresh`，系统可能合并重绘请求——这就是为什么 `on-paint` 里只该画图，不该塞耗时计算。
 
@@ -197,7 +212,8 @@ canvas 被缩放时，系统会自动触发一次 `on-paint`——重画本身�
  (define lbl
  (new message%
  [parent this]
- [label (format "~a: ~a" label-text min-val)]))
+ [label (format "~a: ~a" label-text min-val)]
+ [auto-resize #t]))
 
  (define slider
  (new slider%
