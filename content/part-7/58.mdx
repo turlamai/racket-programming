@@ -2,7 +2,7 @@
 
 > Racket 不被困在自己的生态里——它的 FFI 让你直接调用 C 的共享库，把两门语言的能力拼在一起。这篇讲清调用、内存管理和最常见的坑。
 
-Racket 不是被困在自己生态里的语言——遇到现成的 C 库，你不必重写，直接调就行。它的 FFI（`ffi/unsafe`）基于 libffi，能做的事包括：
+Racket 不是被困在自己生态里的语言——遇到现成的 C 库，你不必重写，直接调就行。它的 FFI（`ffi/unsafe`）提供跨语言调用能力，能做的事包括：
 
 - 调用已有共享库（`.so` / `.dylib` / `.dll`）中的函数
 - 将 Racket 的 procedure 作为 C 函数指针传给 C（回调）
@@ -16,6 +16,9 @@ Racket 不是被困在自己生态里的语言——遇到现成的 C 库，你�
 
 ```c
 // add.c
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
 int add(int a, int b) { return a + b; }
 ```
 
@@ -52,7 +55,7 @@ cl /LD add.c /Fe:add.dll
 ```
 
 **加载库**：
-- `(ffi-lib <path-or-`#f-or-name>)` 返回一个 `ffi-lib` 值，通常传 `#f` 或库路径。`#f` 表示“默认库集合”（可查找系统库名）。
+- `(ffi-lib <path-or-`#f-or-name>)` 返回一个 `ffi-lib` 值，通常传 `#f` 或库路径。`#f` 表示在当前进程的可见符号中查找，而不是自动搜索所有系统库。
 
 **查找函数并生成 Racket 函数**：
 - `(get-ffi-obj "symbol-name" lib (_fun <arg-ctypes> -> <ret-ctype>))`
@@ -104,6 +107,9 @@ C 函数示例 `call_twice.c`：
 // call_twice.c
 // f: int (*f)(int)
 // returns f(x) + f(x)
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
 int callTwice(int (*f)(int), int x) {
  return f(x) + f(x);
 }
@@ -133,8 +139,8 @@ Racket 端：
 
 输出应该是 `18`（`3*3 + 3*3`）。
 **要点**：
-- 当 C 期待函数指针时，FFI 可以把 Racket 的 procedure 自动转换成可被 C 调用的函数指针（libffi closure）。
-- **保持引用**：如果你把回调传给 C 并期望 C 在未来某个时间调用它，必须确保 Racket 端保留引用（避免被 GC 回收）。通常把回调存到顶层变量或结构中，直到你不再需要它为止。
+- 当 C 期待函数指针时，FFI 可以把 Racket 的 procedure 自动转换成可被 C 调用的函数指针（具体实现由运行时决定）。
+- **保持引用**：如果你把回调传给 C 并期望 C 在未来某个时间调用它，必须确保 Racket 端保留引用（避免被 GC 回收）。必须依据 `_fun` 的回调保活选项和 C 库注销协议管理生命周期，在 C 不再可能调用回调后才能释放相应引用；不要仅凭局部变量仍可见就推断安全。
 - 回调的并发与线程模型复杂（见文档），跨 Place / 不同执行上下文的回调可能无法工作。
 
 ## 5. 示例 3：分配缓冲区、C 写入，再在 Racket 读字符串
@@ -145,10 +151,14 @@ C 代码 `fill.c`：
 // fill.c
 # include <string.h>
 
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
 void fill(char *buf, int n) {
+ if (!buf || n <= 0) return;
  const char *msg = "hello from c";
  strncpy(buf, msg, n-1);
- buf[n-1] = '\\0';
+ buf[n-1] = '\0';
 }
 ```
 
@@ -168,19 +178,18 @@ Racket 代码：
 (define SIZE 64)
 (define buf (malloc 'raw SIZE)) ; 分配 SIZE 字节
 
-;; 调用 C，C 会写入 buf
-(fill buf SIZE)
-
-;; 把 buf cast 为 C 字符串，再读成 Racket 字符串
-(define s (cast buf _pointer _string))
-(printf "C wrote: ~a\n" s)
-
-;; 'raw 内存不受 GC 管理，用 ffi/unsafe 提供的 free 释放
-(free buf)
+;; 在异常退出时也释放 raw 内存
+(dynamic-wind
+ void
+ (lambda ()
+   (fill buf SIZE)
+   (define s (cast buf _pointer _string/utf-8))
+   (printf "C wrote: ~a\n" s))
+ (lambda () (free buf)))
 ```
 
 解释与注意：
-- `malloc`、`cast`、`_pointer`、`_string` 这些 API 让你在 Racket 与 C 内存表示之间转换。`_string` 从原始指针读取字符串时会复制并按 UTF-8 解码，因此复制完成后，上例的 raw buffer 就可以释放。
+- `malloc`、`cast`、`_pointer`、`_string` 这些 API 让你在 Racket 与 C 内存表示之间转换。这里显式使用 `_string/utf-8` 读取以 NUL 结尾的 UTF-8 字符串，因此复制完成后，上例的 raw buffer 就可以释放。
 - 有时候你也可以直接使用 Racket byte string 配合 `_bytes`。它作为参数传给 C 时不会为了调用本身再复制一份，但 byte string 并不自动保证 NUL 结尾；具体是否适合作为 `char *`，要看 C API 的契约。
 - 内存所有权必须和分配方式配对：`(malloc 'raw ...)` 的结果必须 `free`；`'atomic`、`'nonatomic` 等 GC 管理模式则由 Racket 回收，不能传给 `free`。
 
@@ -210,6 +219,8 @@ Racket 的 FFI 支持定义 C 风格 struct 类型，并以一种更安全的方
 ```
 
 这会在模块中定义 `add` 符号。`define-ffi-definer` 支持一系列选项（命名规则、变量 vs 函数、默认值等），很方便组织大量 C 绑定。
+
+![FFI 调用中的 ABI、指针和内存所有权边界](/images/racket-ffi-boundary.svg)
 
 ## 8. 常见坑与调试建议
 
