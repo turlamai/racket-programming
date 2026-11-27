@@ -43,7 +43,7 @@ clang -dynamiclib -o libadd.dylib add.c
 cl /LD add.c /Fe:add.dll
 ```
 
-把生成的库放到可加载路径或与 Racket 程序同目录（示例里我会用相对路径 `./libadd.so` / `./libadd.dylib`）。
+三个示例均应在生成共享库的目录运行 Racket 程序。相对路径依赖进程工作目录；正式应用可用 racket/runtime-path 锚定模块资源。Windows 请在对应架构的 Developer Command Prompt 中执行 cl。Racket 与共享库的 CPU 架构必须匹配。
 
 ## 2. 基本概念与主要 API 快速参考
 
@@ -55,7 +55,7 @@ cl /LD add.c /Fe:add.dll
 ```
 
 **加载库**：
-- `(ffi-lib <path-or-`#f-or-name>)` 返回一个 `ffi-lib` 值，通常传 `#f` 或库路径。`#f` 表示在当前进程的可见符号中查找，而不是自动搜索所有系统库。
+- `(ffi-lib path-or-name)` 返回一个 `ffi-lib` 值，通常传 `#f` 或库路径。`#f` 表示在当前进程的可见符号中查找，而不是自动搜索所有系统库。
 
 **查找函数并生成 Racket 函数**：
 - `(get-ffi-obj "symbol-name" lib (_fun <arg-ctypes> -> <ret-ctype>))`
@@ -85,7 +85,11 @@ Racket 代码：
 (require ffi/unsafe)
 
 ;; 加载库（相对路径）
-(define lib (ffi-lib "./libadd.so")) ; macOS -> "./libadd.dylib", Windows -> "add.dll"
+(define lib
+  (ffi-lib (case (system-type 'os)
+             [(windows) "./add.dll"]
+             [(macosx) "./libadd.dylib"]
+             [else "./libadd.so"])))
 
 ;; 查找符号并声明类型：int add(int,int)
 (define add
@@ -96,7 +100,7 @@ Racket 代码：
 (printf "2 + 3 = ~a\n" (add 2 3))
 ```
 
-运行会打印 `2 + 3 = 5`。
+保存为 add-demo.rkt，执行 racket add-demo.rkt，预期打印 `2 + 3 = 5`。本例只使用小整数；C 有符号整数溢出并不会获得 Racket 精确整数的自动扩展语义。
 > 注意：函数名大小写和导出名必须和你编译的共享库一致（有时候 C++ 需要 `extern "C"`）。
 
 ## 4. 示例 2：C 调用 Racket 作为回调（function pointer）
@@ -115,7 +119,7 @@ int callTwice(int (*f)(int), int x) {
 }
 ```
 
-编译为共享库。
+沿用示例 1 的编译方式，将输入改为 call_twice.c，输出分别命名为 libcall_twice.so、libcall_twice.dylib 或 call_twice.dll。
 
 Racket 端：
 
@@ -123,7 +127,11 @@ Racket 端：
 #lang racket/base
 (require ffi/unsafe)
 
-(define lib (ffi-lib "./libcall_twice.so")) ; adjust name
+(define lib
+  (ffi-lib (case (system-type 'os)
+             [(windows) "./call_twice.dll"]
+             [(macosx) "./libcall_twice.dylib"]
+             [else "./libcall_twice.so"])))
 
 ;; 声明 callTwice：第一个参数是 function pointer (_fun _int -> _int)
 (define call-twice
@@ -137,7 +145,7 @@ Racket 端：
 (printf "call-twice(square,3) -> ~a\n" (call-twice square 3))
 ```
 
-输出应该是 `18`（`3*3 + 3*3`）。
+保存为 callback-demo.rkt，执行 racket callback-demo.rkt，预期输出 `18`（`3*3 + 3*3`）。
 **要点**：
 - 当 C 期待函数指针时，FFI 可以把 Racket 的 procedure 自动转换成可被 C 调用的函数指针（具体实现由运行时决定）。
 - **保持引用**：如果你把回调传给 C 并期望 C 在未来某个时间调用它，必须确保 Racket 端保留引用（避免被 GC 回收）。必须依据 `_fun` 的回调保活选项和 C 库注销协议管理生命周期，在 C 不再可能调用回调后才能释放相应引用；不要仅凭局部变量仍可见就推断安全。
@@ -162,13 +170,17 @@ void fill(char *buf, int n) {
 }
 ```
 
-Racket 代码：
+沿用示例 1 的编译方式，将 fill.c 编译为 libfill.so、libfill.dylib 或 fill.dll。保存以下代码为 buffer-demo.rkt：
 
 ```racket
 #lang racket/base
-(require ffi/unsafe)
+(require ffi/unsafe rackunit)
 
-(define lib (ffi-lib "./libfill.so"))
+(define lib
+  (ffi-lib (case (system-type 'os)
+             [(windows) "./fill.dll"]
+             [(macosx) "./libfill.dylib"]
+             [else "./libfill.so"])))
 
 (define fill
  (get-ffi-obj "fill" lib
@@ -176,20 +188,24 @@ Racket 代码：
 
 ;; 分配原始内存（raw bytes）
 (define SIZE 64)
-(define buf (malloc 'raw SIZE)) ; 分配 SIZE 字节
+(define (read-message)
+  (define buf #f)
+  (dynamic-wind
+   (lambda () (set! buf (malloc SIZE 'raw)))
+   (lambda ()
+     (fill buf SIZE)
+     (cast buf _pointer _string/utf-8))
+   (lambda ()
+     (free buf)
+     (set! buf #f))))
 
-;; 在异常退出时也释放 raw 内存
-(dynamic-wind
- void
- (lambda ()
-   (fill buf SIZE)
-   (define s (cast buf _pointer _string/utf-8))
-   (printf "C wrote: ~a\n" s))
- (lambda () (free buf)))
+(define message (read-message))
+(check-equal? message "hello from c")
+(printf "C wrote: ~a\n" message)
 ```
 
 解释与注意：
-- `malloc`、`cast`、`_pointer`、`_string` 这些 API 让你在 Racket 与 C 内存表示之间转换。这里显式使用 `_string/utf-8` 读取以 NUL 结尾的 UTF-8 字符串，因此复制完成后，上例的 raw buffer 就可以释放。
+- `malloc`、`cast`、`_pointer`、`_string` 这些 API 让你在 Racket 与 C 内存表示之间转换。这里显式使用 `_string/utf-8` 读取以 NUL 结尾的 UTF-8 字符串，因此复制完成后，上例的 raw buffer 就可以释放。分配放在 dynamic-wind 的进入函数中，避免把一个已经释放的地址作为可重入动态范围的固定资源。此教学例只允许同步调用，不向外暴露指针或延续；C 不能保留该缓冲区。
 - 有时候你也可以直接使用 Racket byte string 配合 `_bytes`。它作为参数传给 C 时不会为了调用本身再复制一份，但 byte string 并不自动保证 NUL 结尾；具体是否适合作为 `char *`，要看 C API 的契约。
 - 内存所有权必须和分配方式配对：`(malloc 'raw ...)` 的结果必须 `free`；`'atomic`、`'nonatomic` 等 GC 管理模式则由 Racket 回收，不能传给 `free`。
 
@@ -222,7 +238,13 @@ Racket 的 FFI 支持定义 C 风格 struct 类型，并以一种更安全的方
 
 ![FFI 调用中的 ABI、指针和内存所有权边界](/images/racket-ffi-boundary.svg)
 
-## 8. 常见坑与调试建议
+## 8. 从教学示例到真实应用
+
+第 33 章的 Rivet 涉及将 Racket CS 运行时嵌入原生宿主，第 31 章的 Glaze 涉及桌面 WebView 宿主。它们与本章直接调用 C 函数并不等价：嵌入还涉及运行时初始化、线程约束、资源部署与跨边界通信协议。阅读各仓库当前的 native 或宿主相关源码与构建说明，不要把手写 FFI 指针调用当作类型化 RPC 的替代方案。
+
+本章三个例子的验收应分别进行：确认共享库可加载、add 返回 5、同步回调返回 18、缓冲区测试通过。使用 raco test buffer-demo.rkt 验证字符串内容；FFI 测试必须加载对应平台真实二进制，单纯语法检查无法验证 ABI 或内存安全。参阅 [Racket FFI Reference](https://docs.racket-lang.org/foreign/)。
+
+## 9. 常见坑与调试建议
 
 - **类型必须精确匹配**：Racket FFI 的 `_int` 对应 C `int`，在它支持的 ABI 映射中是 32 位；真正会随平台数据模型变化的典型类型包括 `long` 和指针宽度。C API 如果使用了 `int32_t`、`int64_t` 等定宽整数，就直接用 `_int32`、`_int64` 等类型表达，不要靠猜。返回值与参数类型写错可能直接导致崩溃。
 - **调用约定**：大多数 C 库使用 C 调用约定（cdecl）。Windows 上有的 API 使用 stdcall（`__stdcall`），需要注意（Racket 的 FFI 支持常见约定，但要查文档）。
