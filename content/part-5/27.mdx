@@ -4,7 +4,7 @@
 
 你写过 `struct`，把几个字段捆在一起；也写过函数，对数据做一次变换就返回。但有些东西天生不是一次性的数据——一个窗口会显示、会隐藏、会响应点击；一个网络连接会建立、会断开、会重连。它们带着状态，有生命周期，行为还会随状态变化。
 
-这种“有状态、长寿命”的家伙，纯函数式写起来别扭：你得把状态不停传进传出，或者用一堆 `set!` 在闭包里偷偷改。Racket 给了另一套工具来对付它们——类。
+这种“有状态、长寿命”的家伙，可以通过不可变值与纯函数表达变化，也可以让长期存在的对象封装状态。两者的接口与生命周期不同。Racket 给了另一套工具来对付它们——类。
 
 ## 类是模板，对象是实例
 
@@ -80,7 +80,7 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 
 三种声明的对外可见性差别如下：
 
-| 声明 | 外部可读 | 外部可写 | 子类可访问 |
+| 声明 | 外部可读 | 外部可写 | 子类可引入字段名 |
 |---|---|---|---|
 | `define`（私有字段） | 否 | 否 | 否 |
 | `field`（公有字段） | 是 | 是 | 是 |
@@ -213,9 +213,39 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 
 ![类、独立实例与方法继承关系](/images/oop-class-inheritance-fig01.svg)
 
+## 动手练习：独立实例与参数校验
+
+保存为 counter-class.rkt：
+
+```racket
+#lang racket
+(require racket/class rackunit)
+
+(define counter%
+  (class object%
+    (init [initial 0])
+    (unless (exact-nonnegative-integer? initial)
+      (raise-argument-error 'counter% "exact-nonnegative-integer?" initial))
+    (define count initial)
+    (super-new)
+    (define/public (increment!)
+      (set! count (add1 count)))
+    (define/public (value) count)))
+
+(define a (new counter%))
+(define b (new counter% [initial 10]))
+(send a increment!)
+(check-equal? (send a value) 1)
+(check-equal? (send b value) 10)
+(check-exn exn:fail:contract?
+           (lambda () (new counter% [initial -1])))
+```
+
+执行 `raco test counter-class.rkt`，预期三项检查通过。这里 init 只用于初始化私有字段 count；方法引用的是字段，而不是构造参数。两个实例有独立状态。此例没有实现并发访问保护。
+
 ## 什么时候该用类
 
-Racket 的函数式是根，类是补充。大部分程序用函数、用 `struct`、用 `match` 就写得很好——输入进去、算个结果出来，没必要包一层对象。
+Racket 同时支持函数式编程与对象系统。大部分程序用函数、用 `struct`、用 `match` 就写得很好——输入进去、算个结果出来，没必要包一层对象。
 
 当组件需要对象身份、封装和可扩展行为时，可以考虑类；结构体与函数也是有效的组织方式。
 
