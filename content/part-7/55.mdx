@@ -123,7 +123,7 @@ curl -i -X POST http://127.0.0.1:8080/tasks/42
 racket examples/taskboard/app.rkt
 ```
 
-先停止前面的 8080 端口服务，再访问 http://127.0.0.1:8080/。输入一个任务标题，点击 Add，再试着 Toggle 和 Delete。关闭并重新启动服务，观察数据是否还在。
+先停止前面的 8080 端口服务，再启动 Taskboard 并访问 http://127.0.0.1:8080/。输入一个任务标题，点击 Add，再试着 Toggle 和 Delete。关闭并重新启动服务，观察数据是否还在。
 
 默认数据库文件为 taskboard.db。练习时建议使用独立数据库文件，环境变量 LOOM_TASKBOARD_DB 可以指定其位置，LOOM_TASKBOARD_PORT 可以调整端口。不要删除已有业务数据来重置练习环境。
 
@@ -168,6 +168,29 @@ Taskboard 在后端声明了任务模型和仓库：
 
 一次创建任务会先读取已验证的表单字段，再检查标题是否为 1 至 200 个字符，之后生成随机 ID，插入新记录并返回重定向。事务成功结束后，浏览器重新读取首页。这种模式通常称为 POST/Redirect/GET，有助于避免刷新页面时重复提交表单，但不等于服务端已经实现幂等性。
 
+## 阅读真实创建任务的逻辑
+
+当前 app.rkt 中的 create 使用 mutation 包装数据库事务，核心逻辑如下（摘录自原模块）：
+
+```racket
+(define (create req)
+  (mutation req (lambda (c fields)
+    (match (form-values fields "title")
+      [(list title)
+       (define clean (string-trim title))
+       (if (<= 1 (string-length clean) 200)
+           (begin
+             (repository-insert! c tasks
+               (hasheq 'id (random-id) 'title clean 'done #f))
+             (redirect-local "/"))
+           (error-page 400 "Title must be 1 to 200 characters"))]
+      [_ (error-page 400 "Expected one title")]))))
+```
+
+form-values 可能返回零个、一个或多个值，因此使用 match 要求恰好一个标题。mutation 从 current-verified-form 取得通过中间件验证的表单，在 with-db 和 with-transaction 的边界内执行操作。不能将客户端 required 属性当作后端验证。
+
+当前首页调用 repository-list，并指定 #:limit 100；这是有限列表展示，不是完整分页功能。需要支持更多任务时，还应设计分页、稳定排序和查询界面。
+
 ## 为什么还需要会话和 CSRF
 
 HTTP 不要求每次请求自动继承此前请求的上下文。Cookie 可以让浏览器在后续请求携带一个标识，服务器通过该标识查询会话状态。
@@ -184,7 +207,7 @@ CSRF（跨站请求伪造）指第三方页面诱导浏览器向目标网站发�
 bash examples/taskboard/smoke.sh
 ```
 
-这是 Loom 仓库现有的 HTTP 验收入口。除此以外，还应手动检查添加、完成、删除、重启恢复以及非法表单被拒绝的情况。
+这是 Loom 仓库现有的 HTTP 验收入口。脚本使用临时数据库和 18880 端口，验证缺失令牌、跨会话令牌和无会话请求均被拒绝，并验证添加、文本转义、切换、删除与错误方法。它不会自动证明所有重启恢复、并发写入或公开部署场景。除此以外，还应手动检查添加、完成、删除、重启恢复以及非法表单被拒绝的情况。
 
 练习：对照第 31、33 章的桌面任务管理器，指出三种应用中哪些规则属于纯 Racket 业务逻辑，哪些属于界面或协议边界。三个官方示例并非共享同一个源文件或相同的数据格式。
 
