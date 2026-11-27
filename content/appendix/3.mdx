@@ -34,14 +34,14 @@ Racket 语言
 
 ## 二、Racket 程序最终编译成了什么？
 
-### 1️⃣ 不是直接的机器码（默认情况）
+### 编译产物与执行方式
 
 在默认配置下：
 
 * `.rkt` 源码
 * → 扩展（macro expansion）
-* → 编译为 **Racket 字节码（.zo）**
-* → 由 Racket VM 执行（通过 JIT）
+* → 编译为实现相关的编译形式，可存入 .zo 文件
+* → 加载、链接和执行；CS 与 BC 的编译及执行机制不同
 
 `.zo` 文件就是 Racket 世界里的 “ 目标文件 ”。
 
@@ -55,7 +55,7 @@ Racket 语言
 
 从工程角度看，`.zo` 里包含：
 
-* 序列化的 AST（已完全展开的 core forms）
+* 实现相关的编译代码及模块结构，而非简单保存完整展开 AST
 * 模块边界、依赖信息与相位（phase）元数据
 * 闭包、常量、字面量
 * 对运行时原语的引用
@@ -74,12 +74,12 @@ Racket 语言
 
 ### 3️⃣ 可以编译成机器码吗？
 
-可以，但不是默认路径。
+可以。Racket CS 使用 Chez Scheme 的机器码编译能力；不能把所有 .zo 都视为等待 JIT 的传统字节码。
 
 Racket 支持：
 
-* JIT（Racket CS 通过 Chez Scheme 的 JIT）
-* AOT（raco exe / distribute）
+* 编译、加载与执行方式依 Racket 实现和编译配置而异。
+* raco exe / distribute 负责构造可执行入口和发行目录，不等于把所有代码转换为独立机器码。
 
 但即使是生成 `.exe` 或原生程序：
 
@@ -103,7 +103,7 @@ Racket 支持：
 现代 Racket 有 **两个并行维护的实现**：
 
 **Racket CS（Racket on Chez Scheme）**
-* 从 v7.0（2018）开始成为默认实现
+* 从 Racket 8.0（2021）开始成为默认实现
 * Racket 将自己的运行时 **移植到** Chez Scheme 之上
 * Chez 提供：高性能 GC、高质量 JIT、底层执行引擎
 
@@ -156,7 +156,7 @@ Racket 自己实现了大量运行时组件，包括：
 ```text
 源码 (.rkt)
  ↓ reader
-S-expression
+模块语法对象
  ↓ expander（在 expansion time 执行宏）
 Fully Expanded Program（无宏的 core forms）
  ↓ compiler
@@ -167,15 +167,15 @@ Linklet / Bytecode（.zo）
 
 ### 核心特征：
 
-* **宏在 “ 扩展期（expansion time）” 执行**，而非传统意义的 “ 编译期 ”
+* **宏转换器在展开期执行**，展开可以作为编译流程的一部分
 * 扩展可能发生在你 `raco make` 时，也可能发生在 `require` 加载模块时
 * **Phase separation**：Racket 的宏系统区分多个执行阶段（phase 0, 1, 2...）
 * 语言本身可以改变编译过程
 * 不存在一个 “ 不可修改的语法阶段 ”
 
-**Linklet 的引入（Racket CS）：**
+**Linklet：**
 
-在 Racket CS 中，编译器生成的中间形式叫 **linklet**，它是：
+Linklet 是 Racket 实现中的可链接程序单元，CS 和 BC 均使用相关抽象，它是：
 
 * 比传统字节码更高层的抽象
 * 独立可链接的编译单元
@@ -244,7 +244,7 @@ Linklet / Bytecode（.zo）
 
 3. **运行时与字节码 / Linklet**
    * 程序最终如何存在
-   * Racket CS 的 linklet 是什么
+   * linklet 的导入、导出和实例化
    * 合约系统的运行时开销
 
 ### 进阶主题
@@ -260,6 +260,8 @@ Linklet / Bytecode（.zo）
 * 把 `.rkt → exe` 当成核心问题
 
 ## 八、一句工程化的总结
+
+进一步研究时，以 [Racket Reference](https://docs.racket-lang.org/reference/) 的编译、模块和 linklet 章节以及实际运行时源码为准。这里是概念模型，不是对所有版本内部格式的保证。
 
 如果用一句话描述 Racket：
 
@@ -278,8 +280,8 @@ Linklet / Bytecode（.zo）
 | 术语 | 含义 |
 |------|------|
 | Expansion time | 宏展开发生的时期，可能在编译或加载时 |
-| Phase | 代码执行的阶段层级（0 = 运行期，1 = 宏定义期 ...） |
-| Syntax object | 携带词法信息的 S-expression |
+| Phase | 相对于模块的绑定与执行阶段；phase 1 常用于 phase 0 的宏转换器 |
+| Syntax object | 携带作用域、源位置等信息的语法对象 |
 | Linklet | Racket CS 的可链接编译单元 |
 | Custodian | 管理资源（线程、端口等）生命周期的对象 |
 | Racket BC / Racket CS | 两种实现：BC 是较早的实现；CS 基于 Chez Scheme |
