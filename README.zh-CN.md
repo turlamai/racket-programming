@@ -123,7 +123,7 @@
 | 57 | xexpr——HTML 是数据，不是字符串 |
 | 58 | FFI——当 Racket 需要调用 C |
 | 59 | 一个 Racket 程序员的工具箱 |
-| 60 | 如何构建和运行 ActivityLog2 |
+| 60 | Taskly——从源码到完整桌面产品 |
 
 ### 附录
 
