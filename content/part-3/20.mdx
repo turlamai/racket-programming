@@ -20,7 +20,7 @@
 
 就这三种，没有第四种。把它翻译成 Racket，你立刻就眼熟：
 
-```racket
+```text
 ; 变量
 x
 
@@ -36,7 +36,7 @@ Racket 允许你直接写 `λ` 这个字符——它在 Racket 里和 `lambda` �
 
 注意 λ 演算的函数永远只吃一个参数，`(λ (x) M)` 对应 `λx. M`。那两个参数的函数怎么办？答案是再套一层——先用第一个参数返回一个新函数，再让它吃第二个：
 
-```racket
+```text
 (λ (x) (λ (y) ...)) ; 依次接收 x、y，需分两次调用
 ```
 
@@ -52,7 +52,7 @@ Racket 允许你直接写 `λ` 这个字符——它在 Racket 里和 `lambda` �
 
 把函数体 `M` 中自由出现的 `x` 替换成参数 `N`，同时避免将参数中的自由变量意外捕获。一句话说就是“实参代入形参”。**整个 λ 演算的计算，就是反复做这一件事。**
 
-看两个例子：
+看两个例子（第二个假设 A 中没有会被内层 y 捕获的自由变量）：
 
 ```text
 (λx. x) y → y ; 最简单的函数：恒等函数，原样返回参数
@@ -151,7 +151,7 @@ SUCC 的意思：n 表示“用 f 的 n 次”，SUCC n 就再用一次 f，所�
 ;; 5 2 + 3 = 5
 ```
 
-**只用函数，我们构造了布尔选择器、自然数、后继和加法。** 这不是在“模拟”数字——Church 编码证明了一件事：函数本身，就足以表示一切可计算的东西。
+**只用函数，我们构造了布尔选择器、自然数、后继和加法。** 这不是在“模拟”数字——Church 编码展示了如何以函数表示这些基本数据和运算；λ 演算的通用计算能力还依赖更完整的理论结果。
 
 ## α 转换，替换之前先改名
 
@@ -187,32 +187,87 @@ SUCC 的意思：n 表示“用 f 的 n 次”，SUCC n 就再用一次 f，所�
 (struct App (func arg)) ; 函数应用：函数 + 参数
 ```
 
-核心是替换函数——把 `expr` 里所有名为 `x` 的变量换成 `v`：
+核心是避免捕获的替换：只替换自由出现的变量；遇到可能捕获新表达式自由变量的绑定时，先用 gensym 生成全新的符号，再进行 α 改名。
 
 ```racket
+(define (free-in? name expr)
+  (match expr
+    [(Var y) (eq? name y)]
+    [(Abs p body)
+     (and (not (eq? name p)) (free-in? name body))]
+    [(App f a)
+     (or (free-in? name f) (free-in? name a))]))
+
 (define (subst expr x v)
- (match expr
- [(Var y) (if (equal? y x) v expr)] ; 是目标变量就换，否则不动
- [(Abs param body)
- (if (equal? param x)
- expr ; 参数遮蔽了 x，函数体里不用换
- (Abs param (subst body x v)))] ; 否则递归换函数体
- [(App f a) (App (subst f x v) (subst a x v))])) ; 两边都换
+  (match expr
+    [(Var y) (if (eq? y x) v expr)]
+    [(Abs p body)
+     (cond
+       [(eq? p x) expr]
+       [(not (free-in? x body)) expr]
+       [(free-in? p v)
+        (define fresh (gensym p))
+        (Abs fresh
+             (subst (subst body p (Var fresh)) x v))]
+       [else (Abs p (subst body x v))])]
+    [(App f a)
+     (App (subst f x v) (subst a x v))]))
 ```
 
-β 归约几乎是直译——遇到“函数遇上参数”，就执行替换：
+这里约定 Var 的名字与 Abs 的参数都是符号。gensym 生成不与现有符号相同的新符号，即使打印名称相近，也不会误捕获变量。
+
+接下来实现一次最左最外层 β 归约。没有可归约项时返回 #f，否则返回新语法树。为了寻找完整正规形，也会进入函数抽象内部。
 
 ```racket
-(define (reduce expr)
- (match expr
- [(App (Abs param body) arg) (subst body param arg)] ; 函数遇参数：替换
- [(App f a) (App (reduce f) (reduce a))] ; 否则递归归约两边
- [_ expr])) ; 变量、抽象保持原样
+(define (step expr)
+  (match expr
+    [(App (Abs p body) arg) (subst body p arg)]
+    [(App f a)
+     (cond [(step f) => (lambda (f*) (App f* a))]
+           [(step a) => (lambda (a*) (App f a*))]
+           [else #f])]
+    [(Abs p body)
+     (define next (step body))
+     (and next (Abs p next))]
+    [(Var _) #f]))
+
+(define (normalize-term expr fuel)
+  (unless (exact-nonnegative-integer? fuel)
+    (raise-argument-error 'normalize-term
+                          "exact-nonnegative-integer?" fuel))
+  (let loop ([term expr] [remaining fuel])
+    (define next (step term))
+    (cond [(not next) term]
+          [(zero? remaining)
+           (error 'normalize-term "reduction budget exhausted")]
+          [else (loop next (sub1 remaining))])))
 ```
 
-这是一个教学用的局部归约器，不是完整的求值器：它没有实现完整的避免捕获替换，也没有反复归约直到正规形。注意这里的 `subst` 故意省略了 α 转换——它会中招于前面说的变量捕获。一个完整的实现，要在替换前自动给约束变量改名。但作为把理论变成代码的最短路径，这二十来行已经够你看清“计算”在 λ 演算里到底是怎么发生的。
+归约预算限制允许的 β 归约次数，不是运行时间或内存上限。无类型 λ 演算可能不存在正规形，所以不能保证归约总能结束。这个实现也没有解析器，输入仍是手动构造的语法树。
 
-在这个骨架上，你可以继续加按需求值（lazy evaluation）、加完整的 α 转换、加不同的归约策略——从数学形式一步步走到真正的语言实现。
+将本节从 #lang racket 开始的结构定义与以上代码保存在同一文件，再追加测试：
+
+```racket
+(module+ test
+  (require rackunit)
+  (check-match
+   (normalize-term (App (Abs 'x (Var 'x)) (Var 'a)) 10)
+   (Var 'a))
+  (define capture-example
+    (normalize-term
+     (App (Abs 'x (Abs 'y (Var 'x))) (Var 'y)) 10))
+  (check-true (Abs? capture-example))
+  (check-false (eq? (Abs-param capture-example) 'y))
+  (check-true (free-in? 'y capture-example))
+  (define omega-part (Abs 'x (App (Var 'x) (Var 'x))))
+  (check-exn exn:fail?
+             (lambda ()
+               (normalize-term (App omega-part omega-part) 10))))
+```
+
+保存为 lambda-calculus.rkt，执行 `raco test lambda-calculus.rkt`，预期五项检查通过。测试关注结构与自由变量，而不依赖 gensym 产生的具体名字。最后一个测试验证无限自我应用不会被错误地认作正规形。
+
+这已经是一个具有捕获避免替换、正规序归约与预算控制的教学归约器，而不是完整的 Racket 实现。下一章将通过不动点组合子继续讨论递归。
 
 ---
 
