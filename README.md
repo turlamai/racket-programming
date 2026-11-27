@@ -113,7 +113,7 @@ Seven volumes (60 chapters) + appendix (6 articles). The narrative arc goes: fro
 
 ### Appendix (附录)
 
-Universal patterns for embedding Racket inside native applications, a complete guide to compiling Racket from source, and a dissection of Racket's language implementation.
+Embedding Racket, compiling Racket from source, language implementation, standard GUI controls, custom canvas drawing, and gui-easy.
 
 | # | Title |
 |---|-------|
