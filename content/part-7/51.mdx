@@ -34,13 +34,18 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 
 ;; 将字符串转换为合法的端口号
 (define (string->safe-port-number str)
+  (unless (regexp-match? #px"^[0-9]+$" str)
+    (raise-argument-error 'string->safe-port-number
+                          "decimal digits only" str))
   (define port (string->number str))
   (unless (and (exact-integer? port) (<= 1 port 65535))
     (raise-argument-error 'string->safe-port-number
-                          "string representing an exact integer from 1 to 65535"
+                          "decimal port number from 1 to 65535"
                           str))
   port)
 ```
+
+这个接口特意只接受 ASCII 十进制数字，不接受 80.0、1/1、#x50 或带空格的文本；允许前导零。这是应用自行选择的配置语法，不是所有端口解析器必须遵守的规则。
 
 一眼看过去，读的人先看到 `provide`：这个模块给外界什么、各是什么类型。实现细节全部排在后面。
 
@@ -49,12 +54,14 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 **`cond` 优于嵌套 `if`**。多分支时嵌套 `if` 会越埋越深，`cond` 把所有分支平铺在同一列：
 
 ```racket
-;; 反模式
+;; 示例输入
+(define x 50)
+;; 嵌套写法
 (if (positive? x)
     (if (> x 100)
         'large
         'small)
-    'negative)
+    'non-positive)
 
 ;; 推荐模式
 (cond [(> x 100) 'large]
@@ -90,10 +97,16 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
   (require rackunit)
   (check-equal? (string->safe-port-number "8080") 8080)
   (check-exn exn:fail? (lambda () (string->safe-port-number "80.0")))
-  (check-exn exn:fail? (λ () (string->safe-port-number "99999"))))
+  (check-exn exn:fail:contract? (lambda () (string->safe-port-number "99999")))
+  (check-equal? (string->safe-port-number "1") 1)
+  (check-equal? (string->safe-port-number "65535") 65535)
+  (check-equal? (string->safe-port-number "00080") 80)
+  (for ([bad '("0" "65536" "1/1" "#x50" " 80" "" "80\n")])
+    (check-exn exn:fail:contract?
+               (lambda () (string->safe-port-number bad)))))
 ```
 
-测试跟代码住在同一个文件里，改函数的时候顺手就能跑。
+将测试附加到开头的端口模块，保存为 port-number.rkt，执行 raco test port-number.rkt，预期十三项检查通过。测试子模块直接调用内部定义，验证实现的校验逻辑；如需验证导出契约，还应从独立模块调用。
 
 ## 让规范自己长出来
 
