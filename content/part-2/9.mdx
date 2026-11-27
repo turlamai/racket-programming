@@ -2,21 +2,39 @@
 
 > 列表可以容纳各种值，但用固定位置表达字段时，需要额外约定各位置的含义。`struct` 给每个字段一个名字，顺手生成谓词、访问器和不可变性。为什么树、节点、配置这类复合数据，一到 `struct` 手里就突然清楚？
 
-你用列表装过一个树：根在第一个位置，子树挂在后面。取根的值是 `(first 树)`，取左子树是 `(first (rest 树))`——单看这两行，没人知道 `rest` 里到底是子树还是别的。树一深，取一个节点就变成一层套一层的 `first` 和 `rest`，写的人当下懂，三天后连自己都得重新推导一遍。
+先考虑一个简单的联系人列表，再考虑更复杂的树形结构（树将在第 14 章详细介绍）：根在第一个位置，子树挂在后面。取根的值是 `(first 树)`，取左子树是 `(first (rest 树))`——单看这两行，没人知道 `rest` 里到底是子树还是别的。树一深，取一个节点就变成一层套一层的 `first` 和 `rest`，写的人当下懂，三天后连自己都得重新推导一遍。
 
 列表有结构，但各位置的业务含义往往需要额外约定。`struct` 做的事很简单：把脑子里的形状写进代码，再顺手给你生成访问、判断、复制的工具。
 
-## 列表能装一切，代价是你得记位置
+## 从联系人开始：为什么需要字段名
+
+```racket
+(define contact-data '("Ada" "ada@example.com"))
+(first contact-data) ;; "Ada"
+(second contact-data) ;; "ada@example.com"
+
+(struct contact (name email) #:transparent)
+(define ada (contact "Ada" "ada@example.com"))
+(contact-name ada) ;; "Ada"
+(contact-email ada) ;; "ada@example.com"
+(contact? ada) ;; #t
+```
+
+前一种写法依赖位置约定，后一种明确了构造器、字段和类型谓词。结构体默认不限制字段值的类型；如需限制，可以使用后面介绍的 guard 或契约。
+
+下面的树例子属于进阶预览，第一次阅读可以先跳过递归部分。
+
+## 列表中的字段位置
 
 嵌套列表表示树，能跑，但每个位置的含义全靠约定：
 
 ```racket
-(define tree
+(define list-tree
  '(1 (2 (4) (5)) (3 (6) (7))))
 
-(first tree) ; 1，根的值
-(first (rest tree)) ; (2 (4) (5))，左子树
-(first (rest (rest (first (rest tree))))) ; 你猜这行取的是什么
+(first list-tree) ; 1，根的值
+(first (rest list-tree)) ; (2 (4) (5))，左子树
+(first (rest (rest (first (rest list-tree))))) ; 你猜这行取的是什么
 ```
 
 第三行取的是节点 2 的右孩子——但你从代码里看不出来。**位置就是语义，而语义只活在写代码的人脑子里。** 换个人来维护，或者你自己过两周再看，都得重新人肉推导一遍。
@@ -72,7 +90,9 @@
 
 `#:mutable` 可以加在单个字段上（只开那一个字段的 setter），也可以加在整个 `struct` 后面（所有字段都可变）。**默认不可变，是 Racket 替你挡掉了一整类“到底是谁改了它”的 bug。**
 
-## `match` 把拆解写进模式
+## `match` 把拆解写进模式（进阶预览）
+
+以下代码使用第 13 章的 map、第 14 章的递归和第 19 章的 match。第一次阅读可以先掌握构造器与访问器，学完这些章节再回来。
 
 访问器是“取一个字段”，`match` 是“一次性把形状拆开”。两者是搭档：
 
@@ -121,7 +141,7 @@
 更新继承来的字段，`struct-copy` 需要你指明这个字段来自哪个父类型：
 
 ```racket
-(struct-copy book b [author "John McCarthy" #:parent document])
+(struct-copy book b [author #:parent document "John McCarthy"])
 ;; => (book "John McCarthy" "Recursive Functions" "MIT Press")
 ```
 
