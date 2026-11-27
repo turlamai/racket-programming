@@ -62,7 +62,7 @@ reader.rkt 写成：
 hello
 ```
 
-这里 hello 指向集合 hello 的 main.rkt。进入 hello 的父目录执行：
+这里 hello 指向集合 hello 的 main.rkt。进入 hello 的父目录执行（目录名 hello 同时作为集合与默认包名；请避免与已安装包冲突）：
 
 ```sh
 raco pkg install --auto --link ./hello
@@ -119,12 +119,32 @@ port->string 读取输入端口的全部剩余内容，不只读取一行。datu
 
 用 racket 运行该文件，预期打印 Reader 收到的剩余文本。语言声明后的换行是否包含在剩余文本中取决于读取入口；本例不承诺复现整个文件的原始字节。
 
-这只是教学 Reader：没有精确的源位置映射、编辑器语言信息或输入长度限制。真正的语言还需要错误诊断、资源限制和测试。
+literal-read-syntax 的 src 参数是源名称，本例没有把它附加到生成的语法对象，因此错误定位有限。这只是教学 Reader：没有精确的源位置映射、编辑器语言信息或输入长度限制。真正的语言还需要错误诊断、资源限制和测试。
 
 ## 回顾三个阶段
 
 Reader 将源文本转换成模块语法对象。Expander 在模块语言提供的规则下解析绑定、展开宏。运行时执行得到的程序。编译与模块实例化还有其他细节，本章先建立这个概念模型。
 
-练习：修改 literal，让它将每一行转换成带行号的字符串，再作为数据嵌入模块。不要把文本直接拼接成可执行代码。
+## 动手练习：给文本加行号
+
+将 literal 的 reader.rkt 中的 literal-read-syntax 替换为以下实现，保留其他定义：
+
+```racket
+(define (literal-read-syntax src in)
+  (define lines
+    (for/list ([line (in-lines in)]
+               [n (in-naturals 1)])
+      (format "~a: ~a" n line)))
+  (datum->syntax
+   #f
+   `(module literal racket/base
+      (for-each displayln ',lines))))
+```
+
+这里将行号和文本组成普通字符串列表，再通过 quote 嵌入模块。即使输入包含括号和 Racket 表达式，它仍然只是文本。换行由 in-lines 读取规则处理，若语言声明后的剩余输入从空行开始，空行也会参与编号。
+
+验证方式：新建 #lang literal 文件，在后续行写入中文文本和 `(+ 1 2)`，运行后确认该表达式作为原样文本输出，而不是求值为 3。练习结束后，可通过 `raco pkg remove literal` 移除本次链接的包（确认没有其他同名项目）。
+
+本章没有实现完整语言工具链；下一步可参考 Racket Guide 的 Creating Languages 章节，为 reader 增加源位置和编辑器支持。
 
 下一卷学习工程工具链、数据库、Web 和应用发布。
