@@ -23,7 +23,7 @@
 ```bash
 # 安装远程包
 
-raco pkg install some-package
+raco pkg install --auto rackunit-lib
 
 # 本地开发模式（推荐）
 
@@ -62,14 +62,22 @@ raco exe main.rkt
 
 ## 把 raco 用起来
 
-日常开发的三段工作流：
+先在一个空目录创建 main.rkt：
+
+```racket
+#lang racket/base
+(define (double n) (* 2 n))
+(module+ main (displayln (double 21)))
+(module+ test
+  (require rackunit)
+  (check-equal? (double 21) 42))
+```
+
+这个单文件程序不需要先安装为包。确认本机具有 rackunit-lib，再执行以下工作流：
 
 ```bash
-# 开发阶段
-raco pkg install --link .
-
 # 测试阶段
-raco test .
+raco test main.rkt
 
 # 编译检查
 raco make main.rkt
@@ -78,5 +86,7 @@ raco make main.rkt
 raco exe main.rkt
 raco distribute dist main
 ```
+
+Windows 使用 `raco exe -o main.exe main.rkt` 和 `raco distribute dist main.exe`。在分发目录中确认实际入口路径并运行，预期打印 42。不要只复制入口文件或把当前平台生成的二进制文件当成跨平台产物。下一章再建立可链接安装的包。
 
 之后每次遇到新的工程需求——文档生成、部署、格式检查——先别急着找第三方工具，先问一句 `raco` 有没有现成的子命令。这个习惯会让你在 Racket 生态里事半功倍。
