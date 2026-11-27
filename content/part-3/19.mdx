@@ -8,18 +8,18 @@
 
 ## 先看清 `match` 的骨架
 
-判断一个值是不是 3，`cond` 这么写：
+先用数值 3 演示判断，再尝试换成 4，`cond` 这么写：
 
 ```racket
 (cond
- [(equal? x 3) 'yes]
+ [(equal? 3 3) 'yes]
  [else 'no])
 ```
 
 `match` 这么写：
 
 ```racket
-(match x
+(match 3
  [3 'yes]
  [_ 'no])
 ```
@@ -118,7 +118,7 @@
 
 ```racket
 (match 5
- [(? (λ (x) (< x 10)) small) (format "~a 太小了" small)])
+ [(? (λ (x) (and (real? x) (< x 10))) small) (format "~a 太小了" small)])
 ;; "5 太小了"
 ```
 
@@ -146,7 +146,8 @@
 
 ```racket
 (match '(a b c)
- [(app length 3) 'three-elements]) ;; 'three-elements
+ [(and (? list?) (app length 3)) 'three-elements]
+ [_ 'other]) ;; 'three-elements
 ```
 
 `app` 让你能“先变换、再判断”，任何函数都能塞进模式里。`not` 是它们的反面，匹配“不是这种形状”的值，不绑定任何变量：
@@ -214,9 +215,9 @@ b ;; 2
 
 ```racket
 (define (handle-result r)
-  (cond [(and (pair? r) (eq? (car r) 'ok))
+  (cond [(and (list? r) (= (length r) 2) (eq? (car r) 'ok))
          (format "成功：~a" (cadr r))]
-        [(and (pair? r) (eq? (car r) 'error))
+        [(and (list? r) (= (length r) 2) (eq? (car r) 'error))
          (format "失败：~a" (cadr r))]
         [else "未知"]))
 ```
