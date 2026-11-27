@@ -20,10 +20,10 @@ def log(msg_or_fmt, *rest):
  printf(msg_or_fmt, *rest)
 ```
 
-能跑，但别扭。问题出在三件事上：
+这是用于比较的伪代码，并不是完整的 Python 程序。问题出在三件事上：
 
 - 参数个数本来是接口的一部分，这里却被埋进了函数体的运行期逻辑
-- 调用方传错个数，得等进到函数里才报错，错误被延后
+- 手写分派时需要自行检查允许的参数数量
 - 光看签名，你看不出这个函数到底接受哪几种调用形态
 
 Scheme 和 Racket 的设计取向是另一条路：**如果一个区分是结构性的，就让它体现在语法层面**。于是有了 `case-lambda`。
@@ -39,7 +39,7 @@ Scheme 和 Racket 的设计取向是另一条路：**如果一个区分是结构
  [(given surname) (string-append "Hello, " given " " surname)]))
 ```
 
-每一行方括号是一项 `clause`（分支），形参列表和 `lambda` 一样。调用时按个数匹配：
+每一行方括号是一项 `clause`（分支），形参列表支持固定参数与 rest 参数。调用时按个数匹配：
 
 ```racket
 (greet "Alice")
@@ -145,8 +145,8 @@ Scheme 和 Racket 的设计取向是另一条路：**如果一个区分是结构
  (contract-out
  [report-cost
  (case->
- (integer? integer? . -> . string?)
- (string? . -> . string?))]))
+ (-> integer? integer? string?)
+ (-> string? string?))]))
 ```
 
 文档、契约、实现，三者在“函数形态”上对齐——这正是 Racket 生态一致性的来源：**一个函数长什么样，从签名到实现都讲同一套话**。
