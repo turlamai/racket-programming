@@ -1,6 +1,6 @@
 # Racket 编译完全指南
 
-> 从源代码编译 Racket：Linux、macOS、Windows 三平台的完整步骤，以及编译过程中值得看懂的那些实现细节。
+> 从源代码编译 Racket：Linux、macOS、Windows 三平台的构建入口，以及编译过程中值得看懂的那些实现细节。
 
 作为一名开发者，从源代码编译 Racket 不仅能让你获得最新的功能和性能优化，还能深入了解这个强大的语言实现。无论你是在 Linux、macOS 还是 Windows 上，这篇指南都会带你一步步完成编译过程。
 
@@ -82,6 +82,8 @@ Windows 的构建稍微复杂一些，需要：
 
 ## 快速开始：原地构建（推荐）
 
+本节针对 Git 源码仓库。官方源码发行包则可能包含预构建的包与文档，并采用 configure、make、make install 流程。两类源码入口不要混用。
+
 原地构建是默认且推荐的模式，它将构建和安装合并为一个操作，非常适合开发。
 
 ### Unix/Linux 和 macOS
@@ -127,16 +129,16 @@ make
 在 Windows 上，首先需要配置 Visual Studio 环境：
 
 ```cmd
-# 打开 Developer Command Prompt for VS
-# 然后进入 Racket 源代码目录
+REM 打开 Developer Command Prompt for VS
+REM 然后进入 Racket 源代码目录
 
 cd racket
 
-# 配置构建环境（选择 x64 或 x86）
+REM 配置构建环境（选择 x64 或 x86）
 
 racket\src\worksp\msvcprep.bat x64
 
-# 开始构建
+REM 开始构建
 
 nmake
 ```
@@ -202,13 +204,13 @@ Racket 有两种主要实现：
 **Racket CS（Chez Scheme 实现）- 默认推荐**
 
 ```bash
-# 构建并安装 Racket CS（这是 make in-place 的简写）
+# 构建并安装 Racket CS（默认构建即为 CS）
 
 make cs
 
 # 或更明确的方式
 
-make in-place VM=cs
+make cs
 ```
 
 > **注意**：`make cs` 不是独立构建模式，而是 `make in-place` 的变体，明确指定使用 Racket CS 实现。
@@ -222,7 +224,7 @@ make bc
 
 # 或更明确的方式
 
-make in-place VM=bc
+make bc
 ```
 
 **同时构建两种实现**：
@@ -238,11 +240,11 @@ make both
 ```bash
 # 重新构建 CS，不下载新包
 
-make also-cs
+make as-is
 
 # 重新构建 BC，不下载新包
 
-make also-bc
+make bc-as-is
 ```
 
 ### Unix 风格安装
@@ -328,21 +330,11 @@ make JOBS=2
 
 对于高级用户，Racket 支持交叉编译，但需要正确配置多个变量：
 
-```bash
-# 为 ARM Linux 交叉编译（简化示例）
-
-make in-place \
-  CONFIGURE_ARGS="--host=arm-linux" \
-  BOOTFILE_RACKET=/path/to/host/racket
-```
+交叉编译需要明确宿主工具、目标三元组、目标库以及启动文件。请参照所检出版本的 build.md 和 racket/src/README.txt，而不要直接套用一个未经验证的 ARM 命令。
 
 > **注意**：交叉编译是一个复杂的主题，完整的配置涉及 `BOOTFILE_RACKET`、`SCHEME`、`CS_HOST_WORKAREA_PREFIX` 等多个变量。详细信息请参考 build.md。
 
-你可以通过 `CONFIGURE_ARGS` 传递额外的配置选项：
-
-```bash
-make in-place CONFIGURE_ARGS="--enable-pthread"
-```
+CONFIGURE_ARGS 可传递目标版本支持的配置选项；先查看对应 configure 的帮助。
 
 ## 构建时间对比
 
@@ -352,10 +344,10 @@ make in-place CONFIGURE_ARGS="--enable-pthread"
 
 | 构建模式 | 构建时间 | 说明 |
 |---------|---------|------|
-| 源代码发行版（带预构建包） | 最快 | 只需编译平台特定组件 |
-| Git 仓库原地构建（首次） | 中等 | 完整构建 + 包下载 |
-| Git 仓库原地构建（更新） | 较快 | 增量构建 |
-| 最小化构建（make base） | 最基础 | 不包含包和文档 |
+| 源代码发行版（带预构建包） | 通常较短 | 只需编译平台特定组件 |
+| Git 仓库原地构建（首次） | 依赖环境 | 完整构建 + 包下载 |
+| Git 仓库原地构建（更新） | 取决于改动 | 增量构建 |
+| 最小化构建（make base） | 范围较小 | 不包含包和文档 |
 
 ## 总结和建议
 
