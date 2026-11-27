@@ -30,9 +30,6 @@ jobs:
       - name: Install site dependencies
         run: npm ci
 
-      - name: Audit npm dependencies
-        run: npm audit --audit-level=low
-
       - name: Check content metadata and links
         run: npm run check:content
 
@@ -50,3 +47,7 @@ jobs:
 
       - name: Build static site
         run: npm run build
+
+      - name: Audit npm dependencies
+        if: always()
+        run: npm audit --audit-level=low
