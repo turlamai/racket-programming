@@ -14,7 +14,7 @@ The book is free and needs no account. Chapters are educational material, not a 
 
 ## Book Structure
 
-Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: from plain confusion to theoretical foundations to hands-on practice.
+Seven volumes (60 chapters) + appendix (6 articles). The narrative arc goes: from plain confusion to theoretical foundations to hands-on practice.
 
 ### Part 1: 起点：编程与计算的本质 (Foundations)
 
@@ -73,7 +73,7 @@ Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: fro
 | 31 | Glaze——任务列表、界面布局与应用状态 |
 | 32 | Rivet——从 Racket 业务逻辑到平台原生窗口 |
 | 33 | Rivet——共享业务逻辑与平台原生界面 |
-| 34 | GUI 不卡顿——把耗时任务挪到后台线程 |
+| 34 | GUI 并发、测试与发布——让应用稳定运行 |
 
 ### Part 6: 语言设计与计算模型 (Language Design)
 
@@ -120,6 +120,9 @@ Universal patterns for embedding Racket inside native applications, a complete g
 | 1 | 把 Racket 嵌进原生应用——嵌入式运行时的通用模式 |
 | 2 | Racket 编译完全指南 |
 | 3 | Racket 语言实现剖析 |
+| 4 | Racket GUI 标准控件与选型 |
+| 5 | 自定义控件与 Canvas |
+| 6 | gui-easy 声明式 GUI |
 
 ## Reader Feedback
 
