@@ -45,12 +45,12 @@ const appendix = fs.readdirSync(appendixDir)
   .sort((a, b) => a.number - b.number);
 
 if (main.length !== 60) fail(`expected 60 main chapters, found ${main.length}`);
-if (appendix.length !== 3) fail(`expected 3 appendix articles, found ${appendix.length}`);
+if (appendix.length !== 6) fail(`expected 6 appendix articles, found ${appendix.length}`);
 
 for (let i = 1; i <= 60; i += 1) {
   if (!main.some(ch => ch.number === i)) fail(`missing main chapter ${i}`);
 }
-for (let i = 1; i <= 3; i += 1) {
+for (let i = 1; i <= 6; i += 1) {
   if (!appendix.some(ch => ch.number === i)) fail(`missing appendix article ${i}`);
 }
 for (const ch of [...main, ...appendix]) {
@@ -72,8 +72,8 @@ for (const filename of ['README.md', 'README.zh-CN.md']) {
   if (!text.includes('60 chapters') && filename === 'README.md') {
     fail(`${filename}: missing 60 chapter summary`);
   }
-  if (!text.includes('appendix (3 articles)') && filename === 'README.md') {
-    fail(`${filename}: appendix count is not 3`);
+  if (!text.includes('appendix (6 articles)') && filename === 'README.md') {
+    fail(`${filename}: appendix count is not 6`);
   }
 
   for (const ch of main) {
@@ -101,6 +101,14 @@ function walk(dir) {
 
 for (const file of walk(CONTENT)) {
   const text = fs.readFileSync(file, 'utf8');
+  for (const m of text.matchAll(/!\[([^\]\n]*)\]\(\/images\/([^\s)]+)\)/g)) {
+    const asset = path.resolve(ROOT, 'public', 'images', m[2]);
+    if (!asset.startsWith(path.join(ROOT, 'public', 'images') + path.sep) ||
+        !fs.existsSync(asset) || !fs.statSync(asset).isFile()) {
+      fail(`${path.relative(ROOT, file)}: missing image /images/${m[2]}`);
+    }
+    if (!m[1].trim()) fail(`${path.relative(ROOT, file)}: empty image alt text`);
+  }
   for (const m of text.matchAll(/\/book\/(part-\d+|appendix)\/chapter\/([^\s)"'#?]+)\/?/g)) {
     const route = `/book/${m[1]}/chapter/${m[2].replace(/\/$/, '')}`;
     if (!validRoutes.has(route)) {
