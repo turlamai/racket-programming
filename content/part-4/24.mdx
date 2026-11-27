@@ -1,6 +1,6 @@
 # Custodian——Racket 资源的生命周期管家
 
-> Racket 给每份资源配一个 custodian 当管家：管家一关，名下的端口、线程、子管家一并收摊；父管家一断，整条子链级联坍塌。
+> Racket 的 custodian 可以管理一组受支持的资源：管家一关，名下的端口、线程、子管家一并收摊；父管家一断，整条子链级联坍塌。
 
 你写过那种程序吧：打开文件忘了关，连了一堆网络连接没断，起了几个线程没等它们结束就返回了。程序能跑，但句柄在悄悄漏。垃圾回收能回收内存，可你有没有想过：端口、socket、线程这些资源攥着的底层句柄，谁来回收？
 
@@ -28,7 +28,7 @@
 (custodian-shutdown-all worker-box)
 ```
 
-`parameterize` 在这块作用域里把 `current-custodian` 换成 `worker-box`，于是期间 `thread` 出来的线程，经理（managing custodian）就是 `worker-box`，不再是默认的根管家。`custodian-shutdown-all` 一调，这些线程全部被杀，名下的端口全部关闭——你不必一个个去记。
+parameterize 在这一动态范围内把 `current-custodian` 换成 `worker-box`，于是期间 `thread` 出来的线程，经理（managing custodian）就是 `worker-box`，不再是默认的根管家。`custodian-shutdown-all` 一调，本例中仅由 worker-box 管理的线程会被终止。它管理的端口也会关闭；仍具有其他有效管理者的线程需要另行考虑。
 
 ## 关一个，塌一串
 
@@ -75,27 +75,29 @@ custodian 真正的杀手锏不是“管一堆资源”，而是“管一堆会�
 理解了级联，就能用 `parameterize` 给一段逻辑划出干净的资源边界。典型场景：处理一个请求、跑一批数据，期间起的线程、开的端口，都挂在一个临时管家下，逻辑一结束就整体收摊。
 
 ```racket
-(define (process-batch data)
- (define box (make-custodian))
- (parameterize ([current-custodian box])
- ;; 这里新建的线程、端口都归 box 管
- (do-work data))
- ;; 逻辑一结束就清理
- (custodian-shutdown-all box))
+(define (process-batch work)
+  (define box (make-custodian))
+  (parameterize ([current-custodian box])
+    (work))
+  (custodian-shutdown-all box))
 ```
 
-在这个普通批处理例子中，可以用 `dynamic-wind` 的后置动作在离开动态范围时清理。若使用可重新进入该范围的延续，还必须另行处理已关闭管家的生命周期。
+前一种写法在 work 抛出异常时会跳过关闭动作，而且丢弃了 work 的返回值。在这个普通批处理例子中，可以用 `dynamic-wind` 的后置动作在离开动态范围时清理。若使用可重新进入该范围的延续，还必须另行处理已关闭管家的生命周期。
 
 ```racket
-(define (process-batch data)
- (define box (make-custodian))
- (dynamic-wind
- void
- (λ () (parameterize ([current-custodian box]) (do-work data)))
- (λ () (custodian-shutdown-all box))))
+(define (process-batch/safe work)
+  (define box (make-custodian))
+  (dynamic-wind
+   void
+   (lambda ()
+     (parameterize ([current-custodian box]) (work)))
+   (lambda () (custodian-shutdown-all box))))
+
+(process-batch/safe (lambda () (+ 2 3)))
+;; 5
 ```
 
-不必为每一种异常各写一段清理，总闸一拉，全清。Custodian 与控制流上的清理机制可以配合使用：它按“归属”清理，不按“代码路径”清理。如果你想捕获异常再做点别的事，套一层 `with-handlers` 就行——清理仍然交给 custodian。
+无需为每一种异常重复编写关闭受管资源的代码，但不受 custodian 管理的资源仍需要专门的清理机制。Custodian 与控制流上的清理机制可以配合使用：它按“归属”清理，不按“代码路径”清理。如果你想捕获异常再做点别的事，套一层 `with-handlers` 就行——清理仍然交给 custodian。
 
 ## 实战：一个能整体关停的服务组
 
@@ -148,10 +150,11 @@ custodian 真正的杀手锏不是“管一堆资源”，而是“管一堆会�
  (thread (λ () (sleep 100))))
 
 (filter thread? (custodian-managed-list box (current-custodian)))
-;; => (#<thread> #<thread>)
+;; => (#<thread> #<thread>)，顺序不应作为接口保证
+(custodian-shutdown-all box)
 ```
 
-如果 `box` 已经被关掉，这个调用直接返回 `'()`，不会再抛错。
+已经关闭的 custodian 不再管理活跃资源；调用时仍须满足 custodian-managed-list 的参数与层级要求。
 
 ## 关闭是强制的，没有协商
 
@@ -161,7 +164,27 @@ custodian 真正的杀手锏不是“管一堆资源”，而是“管一堆会�
 
 被关掉的资源也不能再用了。一个已终止的线程，`thread-wait` 它能正常返回（等它结束），但你别指望它还能跑代码。动手前用 `custodian-shut-down?` 探一下，避免对一具尸体操作。
 
-## 一个暗刃：内存算在谁的头上
+## 动手练习：验证级联关闭
+
+```racket
+#lang racket
+(require rackunit)
+
+(define parent (make-custodian))
+(define child (make-custodian parent))
+(define worker
+  (parameterize ([current-custodian child])
+    (thread (lambda () (sync never-evt)))))
+(check-false (thread-dead? worker))
+(custodian-shutdown-all parent)
+(check-true (custodian-shut-down? parent))
+(check-true (custodian-shut-down? child))
+(check-true (thread-dead? worker))
+```
+
+保存为 custodian-test.rkt，执行 `raco test custodian-test.rkt`。预期四项检查通过。never-evt 是永不就绪的同步事件，用来让测试线程保持等待，而不依赖具体的 sleep 时间。这个测试只涉及单一管理者的线程。
+
+## 内存限额与计量
 
 custodian 还能限额：`custodian-limit-memory` 给管家设一个内存上限，该机制依赖运行时支持与内存计量，在垃圾回收过程中检查限额，不能视为精确的实时硬上限。但这里藏着一把暗刃，和直觉相反——`parameterize` 换的只是“新资源归谁管”，可线程跑起来之后分配的内存，算在管这个线程的管家头上，不是 `parameterize` 里那个新管家：
 
