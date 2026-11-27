@@ -69,9 +69,9 @@ Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: fro
 | 27 | 面向对象——Racket 的 class 与对象 |
 | 28 | 第一个 GUI——窗口、按钮与点击计数器 |
 | 29 | 从控件到应用——理解现代 GUI 的三条路线 |
-| 30 | 8 种控件覆盖九成场景——按语义选 Racket GUI 控件 |
+| 30 | Glaze——从零开发第一个桌面应用 |
 | 31 | Racket GUI 控件清单——内置库一次看全 |
-| 32 | 自定义控件——子类化 canvas 自己画 |
+| 32 | Rivet——从 Racket 业务逻辑到平台原生窗口 |
 | 33 | gui-easy——声明式写 Racket GUI |
 | 34 | GUI 不卡顿——把耗时任务挪到后台线程 |
 
