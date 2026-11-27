@@ -4,7 +4,7 @@
 
 想象你正在学习一个新函数：每次验证一个表达式都重新创建文件、运行程序，反馈过程会显得冗长。真正用来思考的时间不多，大半耗在编译和重启上，外加一遍遍把程序重新“开”回那个状态。
 
-你有没有想过，为什么“看看这段数据经过处理后变成什么样”这么小的一件事，要赔上整个编译-运行的代价？Racket 给了另一种节奏：你敲一个表达式，它立刻把值算出来还给你；你定义一个函数，下一行就能调它；你发现它写错了，重新定义一次，再调一次，新的就生效。整个过程里没有“编译”这一步——或者说，编译在你按下回车的那一刻就完成了。这种工作方式叫 REPL 驱动开发。
+你有没有想过，为什么“看看这段数据经过处理后变成什么样”这么小的一件事，要赔上整个编译-运行的代价？Racket 给了另一种节奏：你敲一个表达式，它立刻把值算出来还给你；你定义一个函数，下一行就能调它；你发现它写错了，重新定义一次，再调一次，新的就生效。交互环境负责必要的读取、展开、编译和求值，不需要你每次手动执行完整构建。这种工作方式叫 REPL 驱动开发。
 
 ## 读、算、印，再读
 
@@ -40,13 +40,13 @@ Racket 自带的 IDE DrRacket，把屏幕切成上下两半。上面叫定义区
 ```racket
 #lang racket
 (define (count-vowels s)
-  (length (filter (lambda (c) (member c '(#\\a #\\e #\\i #\\o #\\u)))
+  (length (filter (lambda (c) (member c '(#\a #\e #\i #\o #\u)))
                   (string->list (string-downcase s)))))
 ```
 
 这样，交互区里就能直接试：
 
-```racket
+```text
 > (count-vowels "hello")
 2
 > (count-vowels "racket")
@@ -57,7 +57,7 @@ Racket 自带的 IDE DrRacket，把屏幕切成上下两半。上面叫定义区
 
 ## 把整个文件搬进 REPL
 
-如果你更习惯自己的编辑器，那典型姿势是：编辑器里写代码，终端里开一个 REPL。`racket` 启动的 REPL 提供了一个特殊形式 `enter!`，能把一整个文件的定义搬进当前 REPL：
+如果你更习惯自己的编辑器，那典型姿势是：编辑器里写代码，终端里开一个 REPL。将上一节完整定义区代码保存为 stats.rkt，并在该目录启动 racket。REPL 提供了一个特殊形式 `enter!`，能把一整个文件的定义搬进当前 REPL：
 
 ```text
 $ racket
@@ -72,7 +72,7 @@ $ racket
 
 REPL 最值钱的地方，是调试时那个紧凑到几乎没有间隙的反馈环。看一个完整的小故事。你想写一个函数，统计字符串里有几个元音。先在 REPL 里把雏形敲出来：
 
-```racket
+```text
 > (define (vowel? c) (member c '(#\a #\e #\i #\o #\u)))
 > (define (count-vowels s)
  (length (filter vowel? (string->list s))))
@@ -82,14 +82,14 @@ REPL 最值钱的地方，是调试时那个紧凑到几乎没有间隙的反馈
 
 `"hello"` 里的 `e` 和 `o` 是两个元音，结果 2，看着对。再试一个：
 
-```racket
+```text
 > (count-vowels "HELLO")
 0
 ```
 
-预期也是 2，实际却是 0。问题出在哪：`vowel?` 只认小写，大写的 `H`、`E` 根本不在那张小写元音表里。修法很直接——统计之前先把字符串转成小写。不用关掉 REPL，不用重开，直接在原地重新定义 `count-vowels`：
+预期也是 2，实际却是 0。问题出在哪：`vowel?` 只认小写，大写的 `E`、`O` 根本不在那张小写元音表里。修法很直接——统计之前先把字符串转成小写。不用关掉 REPL，不用重开，直接在原地重新定义 `count-vowels`：
 
-```racket
+```text
 > (define (count-vowels s)
  (length (filter vowel? (string->list (string-downcase s)))))
 > (count-vowels "HELLO")
@@ -104,7 +104,7 @@ REPL 的另一面优势，是探索。面对一段多步的数据处理，你不
 
 假设你拿到一串用逗号分隔的数字，想算它们的和。你不确定 `string-split` 返回的具体样子，那就一步一步来：
 
-```racket
+```text
 > (define data "1,2,3,4,5")
 > (string-split data ",")
 '("1" "2" "3" "4" "5")
