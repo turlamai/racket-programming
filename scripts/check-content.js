@@ -76,6 +76,22 @@ for (const filename of ['README.md', 'README.zh-CN.md']) {
     fail(`${filename}: appendix count is not 6`);
   }
 
+  const appendixHeading = text.search(/^### (?:Appendix \(附录\)|附录)\s*$/m);
+  if (appendixHeading === -1) {
+    fail(`${filename}: missing appendix section`);
+  } else {
+    const appendixText = text.slice(appendixHeading).split(/\n## /)[0];
+    const appendixRows = new Map();
+    for (const match of appendixText.matchAll(/^\|\s*(\d+)\s*\|\s*(.*?)\s*\|\s*$/gm)) {
+      appendixRows.set(Number(match[1]), match[2].trim());
+    }
+    for (const ch of appendix) {
+      if (appendixRows.get(ch.number) !== ch.title) {
+        fail(`${filename}: appendix ${ch.number} title mismatch: README=${JSON.stringify(appendixRows.get(ch.number))} content=${JSON.stringify(ch.title)}`);
+      }
+    }
+  }
+
   for (const ch of main) {
     const got = rows.get(ch.number);
     if (got !== ch.title) {
