@@ -24,9 +24,9 @@ Racket 为每一站都提供了工具。我们一站站看。
 
 写任何新东西，第一件事不是搭框架，是搞清楚“这个东西到底怎么工作”。Racket 给你的最好工具就是 REPL——敲一行，立刻看结果。
 
-你要写一个处理 CSV 的程序，先在 REPL 里试 `read-line`，试 `string-split`，试 `for/list`，几行下来就把“读一行、切开、转成结构”这件事跑通了。这种“边想边跑”的方式，比写一整个文件再编译运行快得多——你能在几分钟内验证一个想法，不行就马上换思路。
+你要写一个处理简单逗号分隔数字的程序，先在 REPL 里试 `read-line`，试 `string-split`，试 `for/list`，可以先观察读入、切分与转换的结果。string-split 不支持完整 CSV 的引号、转义和跨行字段；处理真实 CSV 文件应选择相应解析器。这种“边想边跑”的方式，比写一整个文件再编译运行快得多——你能在几分钟内验证一个想法，不行就马上换思路。
 
-REPL 不只是新手的玩具。经验丰富的 Racket 程序员在写任何严肃代码前，都会先在 REPL 里把关键逻辑跑通，确认行为符合预期，再整理进文件。这本书卷七前面讲 REPL 的那一章，讲的就是怎么把它变成你的日常武器。
+REPL 不只是新手的玩具。REPL 是验证关键逻辑的一种方式，也可以直接从自动化测试开始，确认行为符合预期，再整理进文件。这本书卷七前面讲 REPL 的那一章，讲的就是怎么把它变成你的日常武器。
 
 ## 第二站：用模块组织代码
 
@@ -68,25 +68,25 @@ raco exe -o my-app my-app/main.rkt
 
 ## 第五站：部署上线
 
-如果做的是桌面应用，第四站的安装包就够了。如果做的是 Web 服务，还得把它部署到服务器上跑起来。
+桌面应用还需要实际安装、升级、用户数据保护与目标平台验证。如果做的是 Web 服务，还得把它部署到服务器上跑起来。
 
 Racket 的 Web 服务器能直接跑，但生产环境通常会在前面加一层 Nginx 做反向代理——处理 HTTPS、负载均衡、静态资源。前面讲 Nginx 部署的那一章，讲的就是怎么把 Racket Web 服务安全地暴露给公网。
 
 不喜欢在服务器上装一堆依赖？Racket 也能容器化。写一个 Dockerfile，把 Racket 应用做成镜像，跑在 Docker 或者 Kubernetes 上，容器只是运行和分发方式，扩缩、滚动更新与健康检查需要额外部署配置。
 
-`raco exe` 的单文件分发和 Docker 镜像，是两种互补的部署形态：前者适合轻量分发，后者适合云上运维。
+raco exe 配合 raco distribute 的发行目录和 Docker 镜像，是两种互补的部署形态：前者适合轻量分发，后者适合云上运维。
 
 ## 数据和交互：两个绕不开的能力
 
 上面五站是骨架，真实项目里还有两块能力几乎一定要用：
 
-**数据持久化。** 绝大多数应用都要存数据。卷七前面讲数据库那一章给了一个关键认知：对入门应用来说，SQLite 不是“一个要运维的数据库服务”，而是“一个带查询能力的结构化文件”。
+**数据持久化。** 绝大多数应用都要存数据。卷七前面讲数据库那一章给了一个关键认知：对入门应用来说，SQLite 是嵌入式关系数据库引擎，可以使用文件保存数据，也支持内存数据库。
 
 你 `require db`，`sqlite3-connect` 打开一个 `.db` 文件，用 SQL 读写，全程不用装任何服务。数据量大了再考虑迁移到 PostgreSQL，但起步阶段，SQLite 几乎零成本。
 
 **跨语言互操作。** 有些能力 Racket 自己没有现成的，但 C 有——加密库、系统调用、底层硬件接口。Racket 的 FFI（`ffi/unsafe`）让你直接调用 C 的共享库，把 Racket 和 C 的能力拼在一起。
 
-附录讲的「嵌入式运行时」就是 FFI 的极致应用——它把整个 Racket 运行时嵌进原生应用的进程，让 Swift、C++ 和 Racket 互相对话。FFI 是 Racket 不被困在自己生态里的出口。
+附录讲的嵌入式运行时则从原生宿主启动 Racket，与 Racket 主动调用 C 的 FFI 方向不同——它把整个 Racket 运行时嵌进原生应用的进程，让 Swift、C++ 和 Racket 互相对话。FFI 是 Racket 不被困在自己生态里的出口。
 
 ## 把它们连起来
 
@@ -101,6 +101,30 @@ Racket 的 Web 服务器能直接跑，但生产环境通常会在前面加一�
 5. **部署**：放到服务器，Nginx 反向代理，对外提供服务
 
 这就是一个 Racket 程序员的完整工具箱。每一步都有趁手的工具，没有哪一步需要你去东拼西凑。
+
+## 完成自己的最小工程
+
+在阅读 Taskly 之前，建议先实现一个无需窗口的任务核心。保存为 tasks.rkt：
+
+```racket
+#lang racket/base
+(require racket/string)
+(provide (struct-out task) add-task)
+(struct task (title done?) #:transparent)
+(define (add-task tasks title)
+  (define clean (string-trim title))
+  (when (string=? clean "")
+    (raise-argument-error 'add-task "nonblank title" title))
+  (append tasks (list (task clean #f))))
+(module+ test
+  (require rackunit)
+  (check-equal? (add-task '() "  买牛奶  ")
+                (list (task "买牛奶" #f)))
+  (check-exn exn:fail:contract?
+             (lambda () (add-task '() " "))))
+```
+
+运行 raco test tasks.rkt，预期两项检查通过。下一步可为它增加文件持久化，再选择 Glaze、Rivet 或 Loom 中的一条界面路线，而不是一次实现所有入口。这个教学核心没有数据库、并发控制或稳定任务 ID，不能直接当作生产应用。
 
 ## 这本书带你到了哪里
 
