@@ -8,11 +8,11 @@
 
 ## Guide 是教程，Reference 是规格
 
-docs.racket-lang.org 上最常被打开的两本，是《The Racket Guide》和《The Racket Reference》。它俩不是同一件事的两种写法，分工完全不同。
+[Racket 官方文档](https://docs.racket-lang.org/) 中的两本重要手册，是[The Racket Guide](https://docs.racket-lang.org/guide/) 和 [The Racket Reference](https://docs.racket-lang.org/reference/)。它俩不是同一件事的两种写法，分工完全不同。
 
 《The Racket Guide》是教程。它按概念推进，配大量可运行的示例，告诉你为什么这么设计。想搞懂模块、宏、continuation 怎么回事，读 Guide。它默认你顺着读，像一本会说话的书。
 
-《The Racket Reference》是规格。它逐条列出每个绑定——一行签名、一段契约、几行文字、几个例子，没有半句多余。同一个 `map`，Guide 花一页讲它和 `for/list` 的取舍，Reference 只给你精确签名和边界行为。它假设你已知道要找什么，来这里只是核对。
+《The Racket Reference》描述绑定的签名、契约、语义和边界行为；复杂条目也可能有大量说明。同一个 `map`，Guide 花一页讲它和 `for/list` 的取舍，Reference 只给你精确签名和边界行为。它假设你已知道要找什么，来这里只是核对。
 
 旁边还挂着一张 Racket Cheat Sheet，一页纸的速查表，忘了函数名去翻它最快。
 
@@ -34,7 +34,7 @@ docs.racket-lang.org 上最常被打开的两本，是《The Racket Guide》和�
  exists-flag : (or/c 'error 'replace 'truncate ...) = 'error
 ```
 
-`exists-flag` 实际能取 `append`、`update`、`truncate/replace` 等多个值，完整签名还多一个 `#:permissions` 关键字；这里省掉是为了看清结构。五个符号认全，这页就读通了：
+`exists-flag` 实际能取 `append`、`update`、`truncate/replace` 等多个值，这里是简化签名，其他关键字和版本差异请以安装版本的 Reference 为准。五个符号认全，这页就读通了：
 
 - 方括号 `[]`：可选。`path`、`proc` 没套方括号，必填；两个 `#:` 套在方括号里，可选。
 - 关键字 `#:`：按名字给参数。调用时写 `#:mode 'text`，顺序随意、自带说明。
@@ -42,11 +42,20 @@ docs.racket-lang.org 上最常被打开的两本，是《The Racket Guide》和�
 - 等号 `=`：默认值。`(or/c 'binary 'text) = 'binary` 表示不给就当 `'binary`。
 - 箭头 `→`：结果契约。这里返回 `any`，意味着返回什么由你传进去的 `proc` 决定。
 
-最朴素的调用只要必填的两项：
+下面使用临时文件，避免覆盖用户文件。make-temporary-file 已经创建文件，因此这里显式选择 truncate；dynamic-wind 在普通离开路径上负责删除临时文件。
 
 ```racket
-(call-with-output-file "out.txt"
- (λ (out) (display "hi" out))) ; out 是 output-port，返回 void
+(require racket/file)
+(define path (make-temporary-file))
+(dynamic-wind
+ void
+ (lambda ()
+   (call-with-output-file path
+     (lambda (out) (display "hi" out))
+     #:exists 'truncate)
+   (file->string path))
+ (lambda () (delete-file path)))
+;; "hi"
 ```
 
 ## contract：箭头两边的类型
@@ -75,7 +84,33 @@ docs.racket-lang.org 上最常被打开的两本，是《The Racket Guide》和�
  boolean?) ; 返回：布尔值
 ```
 
-**contract 是运行时检查的契约，不是静态类型。** 默认的 Racket 没有编译期类型系统，这些约束只在程序跑到那一步时才生效，违反了就抛 contract violation。想知道一个值要满足什么，看契约；想要编译期保证，那是 Typed Racket 的地盘。
+**contract 是运行时检查的契约，不是静态类型。** 普通 Racket 不要求静态类型声明，这些约束只在程序跑到那一步时才生效，违反了就抛 contract violation。想知道一个值要满足什么，看契约；想要编译期保证，那是 Typed Racket 的地盘。
+
+## 实战：把契约放到模块边界
+
+保存为 temperature.rkt：
+
+```racket
+#lang racket/base
+(require racket/contract)
+(provide (contract-out
+          [celsius->fahrenheit (-> real? real?)]))
+(define (celsius->fahrenheit c)
+  (+ (* c 9/5) 32))
+```
+
+在同一目录保存 temperature-test.rkt：
+
+```racket
+#lang racket/base
+(require rackunit "temperature.rkt")
+(check-equal? (celsius->fahrenheit 0) 32)
+(check-equal? (celsius->fahrenheit 100) 212)
+(check-exn exn:fail:contract?
+           (lambda () (celsius->fahrenheit "0")))
+```
+
+执行 raco test temperature-test.rkt，预期三项检查通过。这里通过另一个模块调用导出过程，才能验证 contract-out 的模块边界行为。real? 不是有限实数校验；具体领域还可能需要更严格的契约。
 
 ## 把文档拉到眼前
 
@@ -99,7 +134,7 @@ raco docs map
 
 Reference 里几乎每个函数都附了示例，长这样：
 
-```racket
+```text
 > (map add1 '(1 2 3))
 '(2 3 4)
 ```
