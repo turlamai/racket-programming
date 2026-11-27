@@ -1,6 +1,6 @@
 # 从零开始用 Racket 写一个 Web Server
 
-> Web 开发听起来是一堆陌生名词，但剥到本质就是一件事：一次请求，一次响应——和函数调用没有区别。这篇用 Racket 把这件事赤裸裸摆给你看。
+> Web 开发听起来是一堆陌生名词，但剥到本质就是一件事：一次请求，一次响应——可以借助函数调用理解，但还存在网络、协议和失败边界。这篇用 Racket 把这件事赤裸裸摆给你看。
 
 很多人一听到 “Web 开发”，脑子里立刻冒出一串陌生名词：HTML、CSS、JavaScript、前端框架、后端框架……
 
@@ -14,7 +14,7 @@
 
 ## 一、先别谈“网页”，我们谈“对话”
 
-在最本质的层面，Web 并不神秘，它只是一次 **远程函数调用**。
+在最本质的层面，Web 并不神秘，可以先把请求处理想象为一次跨网络的函数调用，但 HTTP 并不等同于 RPC。
 
 你可以这样理解：
 
@@ -61,6 +61,8 @@ Racket 的 Web Server 几乎就是把这件事 **赤裸裸地摆在你面前**�
 
 (serve/servlet start
  #:port 8000
+ #:listen-ip "127.0.0.1"
+ #:servlet-regexp #rx""
  #:servlet-path "/"
  #:launch-browser? #t)
 ```
@@ -147,6 +149,8 @@ Racket Web Server 的设计思想非常 Lisp：
 
 ### 1 读取请求路径
 
+下面的手写路由仅演示路径匹配，未按 HTTP 方法分发，也没有完整的路径规范化策略。第 55 章将使用 Loom 的路由接口。
+
 ```racket
 (define (start request)
  (define path
@@ -218,7 +222,7 @@ http://localhost:8000/hello?name=Racket
 
 很多教程一上来就引入模板系统，这对新手非常不友好。
 
-先用字符串，完全没问题：
+固定的可信 HTML 字符串可以作为入门示例；动态用户输入不要直接拼进 HTML，应使用结构化构造器及适当的安全校验：
 
 ```racket
 (define (start request)
