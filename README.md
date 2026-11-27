@@ -70,9 +70,9 @@ Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: fro
 | 28 | 第一个 GUI——窗口、按钮与点击计数器 |
 | 29 | 从控件到应用——理解现代 GUI 的三条路线 |
 | 30 | Glaze——从零开发第一个桌面应用 |
-| 31 | Racket GUI 控件清单——内置库一次看全 |
+| 31 | Glaze——任务列表、界面布局与应用状态 |
 | 32 | Rivet——从 Racket 业务逻辑到平台原生窗口 |
-| 33 | gui-easy——声明式写 Racket GUI |
+| 33 | Rivet——共享业务逻辑与平台原生界面 |
 | 34 | GUI 不卡顿——把耗时任务挪到后台线程 |
 
 ### Part 6: 语言设计与计算模型 (Language Design)
