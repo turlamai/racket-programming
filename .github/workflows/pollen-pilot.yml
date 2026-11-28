@@ -1,0 +1,30 @@
+name: Pollen staging
+on:
+  push:
+    branches: [pollen-pilot]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pollen-pilot-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Racket
+        run: sudo apt-get update && sudo apt-get install -y racket
+      - name: Stage original routes
+        run: |
+          racket pollen-pilot/stage.rkt
+          test -s pollen-pilot/chapters.js
+          test "$(find pollen-pilot/book -name '*.pmd' | wc -l)" -eq 64
+          test -s pollen-pilot/book/preface/index.html.pmd
+          test -s pollen-pilot/book/part-7/chapter/60/index.html.pmd
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staged-book
+          path: |
+            pollen-pilot/book
+            pollen-pilot/chapters.js
