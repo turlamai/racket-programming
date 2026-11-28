@@ -26,3 +26,21 @@
   (lambda (out) (display "window.BOOK_CHAPTERS = " out) (write-json entries out) (display ";\n" out))
   #:exists 'truncate/replace)
 (printf "Staged ~a pages; MDX semantics still require audit.\n" (length entries))
+
+;; Every staged page uses an explicit relative asset root, independent of hosting prefix.
+(define (write-template relative)
+  (define prefix (apply string-append (make-list (length (string-split relative "/")) "../")))
+  (define target (build-path pilot relative "template.html"))
+  (display-to-file
+   (string-append "<!doctype html>\n<html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Racket 编程入门 · 吉人</title><link rel=\"stylesheet\" href=\"" prefix "style.css\"></head><body><main><nav><a href=\"" prefix "index.html\">返回目录</a></nav>◊(->html doc)</main></body></html>\n")
+   target #:exists 'truncate/replace))
+(for ([entry (in-list entries)]) (write-template (hash-ref entry 'slug)))
+(define (escape-html s)
+  (string-replace (string-replace (string-replace s "&" "&amp;") "<" "&lt;") ">" "&gt;"))
+(call-with-output-file (build-path pilot "index.html")
+  (lambda (out)
+    (display "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Racket 编程入门 · 吉人</title><link rel=\"stylesheet\" href=\"style.css\"></head><body><main><h1>Racket 编程入门</h1><p>作者：吉人</p><h2>全书目录</h2><ol>" out)
+    (for ([entry (in-list entries)])
+      (fprintf out "<li><a href=\"~a\">~a</a></li>" (hash-ref entry 'url) (escape-html (hash-ref entry 'title))))
+    (display "</ol></main></body></html>" out))
+  #:exists 'truncate/replace)
