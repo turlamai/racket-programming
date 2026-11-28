@@ -1,0 +1,28 @@
+:root { color-scheme: light dark; --bg: #faf9f6; --ink: #2a2820; --accent: #a8532d; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1a16; --ink: #edeae3; --accent: #ffa98c; } }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 1rem/1.8 system-ui, sans-serif; }
+main { max-width: 72ch; margin: auto; padding: 48px 24px; overflow-wrap: anywhere; }
+h1, h2 { line-height: 1.3; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+@media print { body { background: white; color: black; } main { max-width: none; padding: 0; } }
+
+/* Reader preferences and controls; provisional until design acceptance. */
+:root[data-theme="light"] { color-scheme: light; --bg: #faf9f6; --ink: #2a2820; --accent: #a8532d; }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #1c1a16; --ink: #edeae3; --accent: #ffa98c; }
+:root[data-size="large"] main { font-size: 1.125rem; }
+:root[data-size="xlarge"] main { font-size: 1.25rem; }
+.reader-settings { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 16px 24px; border-bottom: 1px solid currentColor; }
+button, select, input { font: inherit; color: inherit; background: var(--bg); border: 1px solid currentColor; border-radius: 8px; padding: 6px 10px; }
+button, select, summary { cursor: pointer; }
+input[type="search"] { max-width: 100%; box-sizing: border-box; }
+#book-toc li { margin-block: 8px; }
+#book-toc small { display: block; }
+[aria-current="page"] { font-weight: 700; }
+#chapter-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; margin-block: 48px 24px; }
+.reading-progress { position: fixed; top: 0; left: 0; width: 100%; height: 3px; border: 0; z-index: 2; accent-color: var(--accent); }
+pre { overflow-x: auto; background: #2a2820; color: #f5f3ee; padding: 16px; border-radius: 8px; line-height: 1.7; }
+pre code { font-size: .875em; white-space: pre; }
+.copy-code { font-size: .875rem; }
+img, svg { max-width: 100%; height: auto; }
+@media print { .reader-settings, .reading-progress, .copy-code, #chapter-nav, #book-search, #book-count, details { display: none; } pre { white-space: pre-wrap; background: white; color: black; } }
