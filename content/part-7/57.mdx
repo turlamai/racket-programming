@@ -1,8 +1,8 @@
 # xexpr——HTML 是数据，不是字符串
 
-> 在多数语言里，HTML 是一段要拼接、要转义、要忍受的字符串。在 Racket 里，HTML 是一种数据结构——你像写代码一样构建它，不用碰字符串。
+> HTML 可以用文本表示，也可以先构建结构化数据，再序列化成文本。本章介绍 Racket 的 xexpr 约定，以及 Loom 的页面构建入口。
 
-在多数编程语言里，HTML 是一段需要"忍受"的字符串：拼接、转义、小心翼翼地闭合标签。而在 Racket 里，HTML 是一种数据结构——一个普通的列表，能用操作数据的方式去构建和变换。这不是修辞，这是 Racket Web 设计的核心思想。这篇从零讲起，看看为什么用 S-expression 写页面是自然、清晰且强大的。
+浏览器接收 HTML 文本，再解析出文档结构。服务端既可以生成字符串，也可以先构造树形数据。Racket 的 xexpr 采用后一种思路。
 
 ## HTML 的本质：不是文本，而是结构
 
@@ -15,7 +15,7 @@
 </div>
 ```
 
-结构上可以理解为：
+这里 div 表示容器，h1 表示一级标题，p 表示段落。开始标签和结束标签围住内容，元素也可以嵌套。浏览器按 HTML 规则解析文本，形成文档树（DOM）。下面只画出这个例子的主要元素：
 
 ```text
 div
@@ -33,7 +33,7 @@ div
 
 一句话定义：
 
-> **xexpr = 用 S-expression 表示 HTML 结构**
+> **xexpr = 按约定使用 Racket 值表示 XML 风格的结构；在 Web 程序中也常用于构建 HTML**
 
 ### 最基本的例子
 
@@ -73,11 +73,11 @@ xexpr：
 
 规律非常清晰：
 
-> **列表的第一个元素是标签，其余元素是子节点**
+> **元素形式以标签符号开头，可选属性列表之后才是子节点。**
 
 ## 三、xexpr 不是字符串，而是普通数据
 
-这一点非常重要。xexpr 并不是“模板语法”，它只是 **普通的 Racket 列表**。
+这一点非常重要。xexpr 并不是“模板语法”，常见元素节点用 Racket 列表表示，文本节点则可以是字符串。任意列表并不一定是合法 xexpr。
 
 你可以：
 
@@ -109,11 +109,12 @@ xexpr 本身只是数据；在 servlet 里，需要用 `response/xexpr` 把它�
 
 (serve/servlet start
  #:port 8000
+ #:listen-ip "127.0.0.1"
  #:servlet-path "/"
  #:launch-browser? #t)
 ```
 
-运行后，浏览器会正确渲染页面。
+保存为 page.rkt，在终端执行 `racket page.rkt`，并访问 http://127.0.0.1:8000/ 。预期看到标题 Hello 和下方段落。按 Ctrl+C 停止本地服务。
 
 这里的关键点在于：
 
@@ -148,7 +149,7 @@ HTML：
  "Racket")
 ```
 
-不需要字符串拼接，也不会产生语法错误。
+不需要手动拼接标签，但仍需遵守 xexpr 结构约定。
 
 ## 六、xexpr 的真正优势：可编程性
 
@@ -170,7 +171,16 @@ xexpr 的价值并不在于“能写 HTML”，而在于：
 这里使用了 Racket 的反引号语法：
 
 - `` ` ``：构造结构
-- `,` / `,@`：插入计算结果
+- `,`：把计算结果插入为一个元素。
+- `,@`：把计算所得列表的各个元素逐个插入外层列表。
+
+```racket
+(define children '((p "A") (p "B")))
+`(div ,children)  ;; '(div ((p "A") (p "B")))
+`(div ,@children) ;; '(div (p "A") (p "B"))
+```
+
+这里需要第二种写法，才能使两个 p 成为 div 的直接子节点。
 
 HTML 成了表达式的一部分。
 
@@ -227,9 +237,54 @@ HTML 成了表达式的一部分。
 
 - 没有额外的模板语言
 - 没有隐藏的上下文变量
-- 没有字符串层面的错误
+- 减少手动拼接和转义错误
 
 你看到的，就是你构造的数据。
+
+## 在 Loom 中构造页面
+
+回到第 55 章已经介绍的 Loom。本例使用 loom/html 提供的组件与元素构造器：
+
+```racket
+#lang racket
+(require loom loom/html)
+
+(define-component (welcome name)
+  (element 'h1 "Hello, " name))
+
+(define app
+  (make-app
+   (list
+    (route #"GET" "/"
+           (lambda (_request)
+             (html-response
+              (page-layout #:title "Welcome"
+                           (welcome "Racket"))))))))
+
+(serve app)
+```
+
+需要先按第 55 章安装 Loom 的对应开发版本。保存为 welcome.rkt，执行 `racket welcome.rkt`，访问 http://127.0.0.1:8080/ ，预期显示 Hello, Racket。该示例仍需实际版本运行验证，不代表生产环境配置。
+
+## 动手验证：页面树与文本转义
+
+保存为 xexpr-test.rkt：
+
+```racket
+#lang racket/base
+(require xml rackunit)
+(define (items xs)
+  `(ul ,@(map (lambda (x) `(li ,x)) xs)))
+(check-equal? (items '("A" "B")) '(ul (li "A") (li "B")))
+(check-equal? (xexpr->string '(p "A & B")) "<p>A &amp; B</p>")
+(check-equal? (xexpr->string '(p "<tag>")) "<p>&lt;tag&gt;</p>")
+```
+
+运行 raco test xexpr-test.rkt，预期三项检查通过。这里验证的是结构和序列化；实际浏览器行为及 URL 安全仍要独立检查。
+
+## 结构化 HTML 不等于完整安全策略
+
+使用字符串文本节点可以避免将普通用户文本直接解释为标签，但 URL、脚本、样式和事件属性仍需要各自的安全策略。不要将用户输入转换成任意标签名或属性名。Loom 的 loom/html 提供受约束的 element 与 page-layout 构造器，限制某些危险标签和属性；它不是通用 HTML sanitizer。原始 html-response 应用于可信结构。
 
 ## 结语
 
@@ -243,4 +298,4 @@ HTML 成了表达式的一部分。
 
 它只是你熟悉的 Racket 世界，在网络上的一次自然延伸。
 
-Web 讲到这里，你已经能用 Racket 写服务、存数据、生成页面、部署上线。下一篇换个方向——当 Racket 自己的能力不够用时，怎么通过 FFI 调用 C 的库，把两门语言的能力拼在一起。
+Web 讲到这里，我们已学习本地服务、数据存储、页面生成及基础部署模型；生产上线仍需要独立安全与运维验收。下一篇换个方向——当 Racket 自己的能力不够用时，怎么通过 FFI 调用 C 的库，把两门语言的能力拼在一起。

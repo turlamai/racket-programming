@@ -1,10 +1,10 @@
 # 面向对象——Racket 的 class 与对象
 
-> Racket 用 `(class object% ...)` 定义类，`new` 造对象，`send` 调方法。它是一套独立于函数式的对象系统，专门收拾那些“带着状态、长期存活”的家伙。
+> Racket 用 `(class object% ...)` 定义类，`new` 造对象，`send` 调方法。类与函数可以协作，用于组织对象身份、行为和状态。
 
 你写过 `struct`，把几个字段捆在一起；也写过函数，对数据做一次变换就返回。但有些东西天生不是一次性的数据——一个窗口会显示、会隐藏、会响应点击；一个网络连接会建立、会断开、会重连。它们带着状态，有生命周期，行为还会随状态变化。
 
-这种“有状态、长寿命”的家伙，纯函数式写起来别扭：你得把状态不停传进传出，或者用一堆 `set!` 在闭包里偷偷改。Racket 给了另一套工具来对付它们——类。
+这种“有状态、长寿命”的家伙，可以通过不可变值与纯函数表达变化，也可以让长期存在的对象封装状态。两者的接口与生命周期不同。Racket 给了另一套工具来对付它们——类。
 
 ## 类是模板，对象是实例
 
@@ -12,9 +12,9 @@
 
 想象一个 GUI 程序：每个窗口、按钮、文本框都是一个对象，有自己的尺寸、文字、回调，还都能响应事件。
 
-**GUI 是面向对象最典型的应用场景。**
+GUI 控件是理解对象的一种直观例子。
 
-Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类——这套对象系统，首先是为它们服务的。抛开 GUI，协议解析器、游戏角色、网络连接这些“长期存活、内部多变”的组件，也是类的用武之地。
+Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类——这些控件使用 Racket 的对象系统。抛开 GUI，协议解析器、游戏角色、网络连接这些“长期存活、内部多变”的组件，也是类的用武之地。
 
 类系统最核心的就三件事：
 
@@ -49,7 +49,7 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 ;; "Hello, I am Racket"
 ```
 
-几个要点：`object%` 是所有类的根基，自定义类几乎都继承自它；`(super-new)` 在构造时调用父类的初始化，每个类必须调用一次；`define/public` 定义的方法，外部用 `send` 调用。类名末尾的 `%` 是社区约定，看到 `%` 结尾就知道是个类。
+几个要点：`object%` 是所有类的根基，自定义类几乎都继承自它；`(super-new)` 是调用父类初始化的一种常见方式，每个实例初始化时必须正确完成父类初始化；`define/public` 定义的方法，外部用 `send` 调用。类名末尾的 `%` 是社区约定，看到 `%` 结尾就知道是个类。
 
 ## 构造参数与字段：init、init-field、field
 
@@ -58,6 +58,7 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 `init-field` 同时声明一个构造参数和一个公有字段，最常用：
 
 ```racket
+;; 用下面的定义替换前面的 person%，或在新文件中运行
 (define person%
  (class object%
  (init-field name age)
@@ -79,7 +80,7 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 
 三种声明的对外可见性差别如下：
 
-| 声明 | 外部可读 | 外部可写 | 子类可访问 |
+| 声明 | 外部可读 | 外部可写 | 子类可引入字段名 |
 |---|---|---|---|
 | `define`（私有字段） | 否 | 否 | 否 |
 | `field`（公有字段） | 是 | 是 | 是 |
@@ -146,6 +147,7 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 方法也能重写：父类用 `define/public` 定义的 `info`，子类用 `define/override` 覆盖，再用 `(super info)` 调用父类原版：
 
 ```racket
+;; 替换前面的 student% 定义
 (define student%
  (class person%
  (super-new)
@@ -183,28 +185,68 @@ Racket 自带一套 GUI 框架，`frame%`、`button%`、`canvas%` 全是类—�
 继承是纵向的：子类从一个固定的父类派生。Mixin 给的是横向能力——它是一个“类的函数”，吃进一个类，吐出一个加了新功能的类。Racket 的 `mixin` 形式，两组接口分别是“输入类必须实现什么”和“结果类会实现什么”：
 
 ```racket
+(define HasInfo (interface () info))
+
 (define logging-mixin
- (mixin () ()
+ (mixin (HasInfo) ()
  (super-new)
  (define/override (info)
  (displayln "[LOG] info called")
  (super info))))
 
-(define logged-person% (logging-mixin person%))
+;; 重新定义一个明确实现 HasInfo 的类
+(define printable-person%
+ (class* object% (HasInfo)
+ (init-field name age)
+ (super-new)
+ (define/public (info)
+ (format "~a is ~a years old" name age))))
+
+(define logged-person% (logging-mixin printable-person%))
 
 (send (new logged-person% [name "Eve"] [age 40]) info)
 ;; [LOG] info called
 ;; "Eve is 40 years old"
 ```
 
-`logging-mixin` 给任何有 `info` 方法的类套上一层日志：调用时先打印一行，再委托给原方法。当你需要“给一批类统一加个能力”，又不想把它们都挂到同一个父类下，mixin 就派上用场。
+`logging-mixin` 给实现 HasInfo 接口的类套上一层日志：调用时先打印一行，再委托给原方法。当你需要“给一批类统一加个能力”，又不想把它们都挂到同一个父类下，mixin 就派上用场。
 
-![oop-class-inheritance-fig01](/images/oop-class-inheritance-fig01.svg)
+![类、独立实例与方法继承关系](/images/oop-class-inheritance-fig01.svg)
+
+## 动手练习：独立实例与参数校验
+
+保存为 counter-class.rkt：
+
+```racket
+#lang racket
+(require racket/class rackunit)
+
+(define counter%
+  (class object%
+    (init [initial 0])
+    (unless (exact-nonnegative-integer? initial)
+      (raise-argument-error 'counter% "exact-nonnegative-integer?" initial))
+    (define count initial)
+    (super-new)
+    (define/public (increment!)
+      (set! count (add1 count)))
+    (define/public (value) count)))
+
+(define a (new counter%))
+(define b (new counter% [initial 10]))
+(send a increment!)
+(check-equal? (send a value) 1)
+(check-equal? (send b value) 10)
+(check-exn exn:fail:contract?
+           (lambda () (new counter% [initial -1])))
+```
+
+执行 `raco test counter-class.rkt`，预期三项检查通过。这里 init 只用于初始化私有字段 count；方法引用的是字段，而不是构造参数。两个实例有独立状态。此例没有实现并发访问保护。
 
 ## 什么时候该用类
 
-Racket 的函数式是根，类是补充。大部分程序用函数、用 `struct`、用 `match` 就写得很好——输入进去、算个结果出来，没必要包一层对象。
+Racket 同时支持函数式编程与对象系统。大部分程序用函数、用 `struct`、用 `match` 就写得很好——输入进去、算个结果出来，没必要包一层对象。
 
-**当一样东西带着状态、长期存活、行为复杂，类就是对的工具。**
+当组件需要对象身份、封装和可扩展行为时，可以考虑类；结构体与函数也是有效的组织方式。
 
 GUI 控件、游戏角色、协议解析器、网络连接，都是类的典型住户。Racket 的好处是这两套范式各管一摊，你需要哪个就拿哪个，没人逼你把所有代码都塞进类里。

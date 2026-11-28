@@ -45,12 +45,12 @@ const appendix = fs.readdirSync(appendixDir)
   .sort((a, b) => a.number - b.number);
 
 if (main.length !== 60) fail(`expected 60 main chapters, found ${main.length}`);
-if (appendix.length !== 3) fail(`expected 3 appendix articles, found ${appendix.length}`);
+if (appendix.length !== 6) fail(`expected 6 appendix articles, found ${appendix.length}`);
 
 for (let i = 1; i <= 60; i += 1) {
   if (!main.some(ch => ch.number === i)) fail(`missing main chapter ${i}`);
 }
-for (let i = 1; i <= 3; i += 1) {
+for (let i = 1; i <= 6; i += 1) {
   if (!appendix.some(ch => ch.number === i)) fail(`missing appendix article ${i}`);
 }
 for (const ch of [...main, ...appendix]) {
@@ -72,8 +72,24 @@ for (const filename of ['README.md', 'README.zh-CN.md']) {
   if (!text.includes('60 chapters') && filename === 'README.md') {
     fail(`${filename}: missing 60 chapter summary`);
   }
-  if (!text.includes('appendix (3 articles)') && filename === 'README.md') {
-    fail(`${filename}: appendix count is not 3`);
+  if (!text.includes('appendix (6 articles)') && filename === 'README.md') {
+    fail(`${filename}: appendix count is not 6`);
+  }
+
+  const appendixHeading = text.search(/^### (?:Appendix \(附录\)|附录)\s*$/m);
+  if (appendixHeading === -1) {
+    fail(`${filename}: missing appendix section`);
+  } else {
+    const appendixText = text.slice(appendixHeading).split(/\n## /)[0];
+    const appendixRows = new Map();
+    for (const match of appendixText.matchAll(/^\|\s*(\d+)\s*\|\s*(.*?)\s*\|\s*$/gm)) {
+      appendixRows.set(Number(match[1]), match[2].trim());
+    }
+    for (const ch of appendix) {
+      if (appendixRows.get(ch.number) !== ch.title) {
+        fail(`${filename}: appendix ${ch.number} title mismatch: README=${JSON.stringify(appendixRows.get(ch.number))} content=${JSON.stringify(ch.title)}`);
+      }
+    }
   }
 
   for (const ch of main) {
@@ -99,14 +115,37 @@ function walk(dir) {
   return out;
 }
 
+const imageRoot = path.join(ROOT, 'public', 'images');
+const referencedImages = new Set();
+
 for (const file of walk(CONTENT)) {
   const text = fs.readFileSync(file, 'utf8');
+  for (const m of text.matchAll(/!\[([^\]\n]*)\]\(\/images\/([^\s)]+)\)/g)) {
+    referencedImages.add(m[2]);
+    const asset = path.resolve(imageRoot, m[2]);
+    if (!asset.startsWith(path.join(ROOT, 'public', 'images') + path.sep) ||
+        !fs.existsSync(asset) || !fs.statSync(asset).isFile()) {
+      fail(`${path.relative(ROOT, file)}: missing image /images/${m[2]}`);
+    }
+    if (!m[1].trim()) fail(`${path.relative(ROOT, file)}: empty image alt text`);
+  }
   for (const m of text.matchAll(/\/book\/(part-\d+|appendix)\/chapter\/([^\s)"'#?]+)\/?/g)) {
     const route = `/book/${m[1]}/chapter/${m[2].replace(/\/$/, '')}`;
     if (!validRoutes.has(route)) {
       fail(`${path.relative(ROOT, file)}: broken internal chapter link ${route}`);
     }
   }
+}
+
+const imageFiles = fs.readdirSync(imageRoot, { withFileTypes: true })
+  .filter(entry => entry.isFile() && /\.(svg|png|jpe?g|webp|gif)$/i.test(entry.name))
+  .map(entry => entry.name);
+const unreferenced = imageFiles.filter(name => !referencedImages.has(name));
+console.log('[content-check] images: ' + imageFiles.length + ' assets, ' +
+  referencedImages.size + ' distinct Markdown image references');
+for (const name of unreferenced) {
+  // Report separately; an asset may still be referenced by MDX or site code.
+  console.warn('[content-check] no Markdown image reference: ' + name);
 }
 
 if (!process.exitCode) {

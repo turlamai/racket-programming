@@ -1,10 +1,10 @@
 # 延续——Racket 里的时间旅行
 
-> 延续（continuation）是“计算剩下要做的事”。`call/cc` 把它打包成一个可调用的值，你可以存起来、传出去、以后再跳回去。`return` 只能回一层，延续能回到任意一个被保存的未来——但这力量该怎么用，才不会反噬？
+> 延续（continuation）是“计算剩下要做的事”。`call/cc` 把它打包成一个可调用的值，你可以存起来、传出去、以后再跳回去。恢复捕获的延续需要遵守提示边界和运行时约束。
 
-你写过函数，`return` 用过无数次。它只能往上一层，回到调用者那里。但你有没有想过：要是能保存住“此刻之后程序要做的全部事”，以后随时跳回这个点，甚至跳好几次呢？
+前面我们已经学会调用函数：函数算出结果后，调用它的表达式便可以继续计算。但你有没有想过：要是能保存住“此刻之后程序要做的全部事”，以后随时跳回这个点，甚至跳好几次呢？
 
-Racket 把“计算的剩余部分”做成了一等公民，可以存进变量、传来传去、随时调用。这就是延续。它和 `return` 不在一个量级：`return` 只回一个地方，延续能回到任意一个被保存的未来。
+Racket 把“计算的剩余部分”做成了一等公民，可以存进变量、传来传去、随时调用。这就是延续。它与普通返回的区别是可以在允许的控制边界内恢复此前捕获的计算。
 
 ## 延续，就是“接下来要做的事”
 
@@ -16,46 +16,53 @@ Racket 把“计算的剩余部分”做成了一等公民，可以存进变量�
 
 求值 `(* 2 3)` 那一刻，它的延续是“把结果乘出来之后，加 1”。平时这个“剩余部分”是隐式的——求值器替你记着，做完一步自动做下一步。Racket 的 `call/cc` 把它显式地交到你手里。
 
-## call/cc：时间旅行的开关
+## call/cc：把剩余计算变成一个值
 
-`call/cc` 是 `call-with-current-continuation` 的简写。它接受一个函数，把“当前的延续”作为参数传给它：
+`call/cc` 是 `call-with-current-continuation` 的简写。它接收一个函数，并把当前延续交给这个函数。延续的捕获范围由最近的匹配提示（prompt）限定。提示像一个控制流的边界：我们可以明确指定希望捕获哪一段计算。
+
+下面的例子使用独立的提示标签，避免把模块初始化或后续测试也意外纳入延续。
 
 ```racket
 #lang racket
 
+(define tag (make-continuation-prompt-tag 'demo))
 (define saved-k #f)
 
-(define result
- (+ 1 (call/cc
- (λ (k)
- (set! saved-k k) ; 把延续存起来
- 10))))
+(define (within thunk)
+  (call-with-continuation-prompt thunk tag))
 
-result
-;; 11 (= 1 + 10)
+(within
+ (lambda ()
+   (+ 1
+      (call/cc
+       (lambda (k)
+         (set! saved-k k)
+         10)
+       tag))))
+;; 11
+
+(within (lambda () (saved-k 100)))
+;; 101
+
+(within (lambda () (saved-k 200)))
+;; 201
 ```
 
-这次 `(call/cc ...)` 返回 10，于是 `result` 是 11。但 `saved-k` 里存着的，是“把 `call/cc` 的返回值加 1、再绑定给 `result`”这一整段未来。现在调用它：
+第一次执行时，`call/cc` 接收的函数正常返回 10，因此外层加法得到 11。同时，saved-k 保存了提示边界内等待一个值、再加 1 的控制上下文。
 
-```racket
-(saved-k 100)
-```
+第二次执行时，我们在新的同标签提示内调用 saved-k，传入 100。当前提示内的控制上下文被替换为保存的上下文，于是得到 101。第三次传入 200，得到 201。
 
-`result` 会突然变成 101——因为 `saved-k` 跳回了 `call/cc` 当时的延续，用 100 重跑了一遍“加 1、赋给 `result`”。
+![延续的捕获与恢复：在提示边界内保存加一的计算，之后传入新值](/images/racket-continuation-control-flow.svg)
 
-调用一个延续，就是丢弃当前计算，跳回它被捕获的那一刻。这不是函数调用，是时间旅行。
+## 延续不是状态快照
 
-![racket-continuation-control-flow](/images/racket-continuation-control-flow.svg)
+可以把调用延续想象成恢复一段尚待执行的计算，但它不是把整个程序倒回过去。捕获点之前的代码不会因此重跑，已经修改的变量、写入的文件也不会自动恢复。
 
-## 它不是 return，是跳回任意时刻
-
-普通函数只能 `call → execute → return`，沿调用栈往回走一层。延续没有这个限制：它捕获的是“从那一点往外的整条路”，可以跨过任意多层调用，也可以反复跳回。
-
-这种能力让 Racket 能直接表达很多别处要专门造机制才能做的事：非本地退出、生成器、协程、异常恢复，甚至 Web 表单的“等用户提交后接着跑”。底层都是同一件事——把延续存起来，以后跳回去。
+普通过程返回到调用处，而延续可以在规定的提示边界和其他运行时约束下转移控制流。这样的机制能够表达非本地退出、生成器与其他控制结构。
 
 ## 用得最多的形态：非本地退出
 
-`call/cc` 的全部威力，在大多数场景里用不上。八成的情况，你只是想从深层嵌套里提前跳出来。这时该用的是 escape continuation——更轻、更安全：
+`call/cc` 的全部威力，在大多数场景里用不上。八成的情况，你只是想从深层嵌套里提前跳出来。这时该用的是 escape continuation——作用范围更明确：
 
 ```racket
 #lang racket
@@ -71,74 +78,37 @@ result
 ;; 8
 ```
 
-`let/ec`（背后是 `call/ec`，全名 `call-with-escape-continuation`）捕获的延续只能往回跳一次，只能跳到定义它的那一点，也只能在其作用期内调用。
+`let/ec`（背后是 `call/ec`，全名 `call-with-escape-continuation`）捕获的延续只能在其动态作用范围内调用；调用会退出该范围。
 
-**escape continuation 是单向、一次性的，这正是它比 `call/cc` 安全的地方。** 需要提前退出、跳出循环、中断递归，都用它；把全功能的 `call/cc` 留给真正要“跳回去好几次”的场景。
+**escape continuation 适合表达有明确动态范围的提前退出。** 需要提前退出、跳出循环、中断递归，都用它；把全功能的 `call/cc` 留给真正要“跳回去好几次”的场景。
 
-## 真·生成器：用 call/cc 造一个 yield
+## 延续与生成器
 
-Python 的 `yield` 能把一个函数变成可以暂停、恢复的迭代器。Racket 标准库的 `racket/generator` 提供同样的东西，但它底层正是用 `call/cc` 拼出来的。几十行就能写一个最小版本，看清这个魔法：
-
-```racket
-#lang racket
-
-(define (make-gen lst)
- (define caller #f) ; 调用者的接收点
- (define resume #f) ; 生成器内部的恢复点
-
- (define (next)
- (call/cc
- (λ (k)
- (set! caller k) ; 记下"把值还给谁"
- (cond
- [(eq? resume 'done) (caller 'done)] ; 已耗尽
- [resume (resume #f)] ; 已启动：跳回上次暂停处
- [else ; 首次：开始遍历
- (for ([x (in-list lst)])
- (let/cc here ; 记下"下次从这里继续"
- (set! resume here)
- (caller x))) ; 把当前值交还调用者
- (set! resume 'done)
- (caller 'done)]))))
- next)
-
-(define g (make-gen '(a b c)))
-(g) ;; 'a
-(g) ;; 'b
-(g) ;; 'c
-(g) ;; 'done
-```
-
-每当 `next` 想交出一个值，它用 `let/cc` 把“生成器内部接下来该跑的代码”存进 `resume`，再用 `caller` 把值送回调用者，整个生成器的执行就此冻结。下一次 `next` 被调用时，`caller` 换成新的接收点，`(resume #f)` 解冻上次冻结的地方。两次 `call/cc`，一进一出，就是 `yield`。
-
-## Web 服务器里的会话魔法
-
-延续最经典的应用，是 Racket Web 服务器。写一个多页表单流程，传统框架要你手动管 session、存中间状态。在 Racket 里：
+生成器可以通过受提示边界限制的延续实现。与其捕获整个调用者的控制上下文，不如使用独立提示标签，只保存生成器内部尚待执行的部分。下面先使用标准库提供的接口观察暂停与恢复：
 
 ```racket
 #lang racket
-(require web-server/servlet
- web-server/servlet-env
- web-server/http/bindings)
+(require racket/generator rackunit)
 
-(define (start req)
- (define next-req
- (send/suspend
- (λ (k-url)
- `(html
- (body
- (form ([action ,k-url])
- (input ([name "name"]))
- (input ([type "submit"]))))))))
- ;; 用户提交表单后，代码从这行继续——next-req 就是这次提交的请求
- (define name (extract-binding/single 'name (request-bindings next-req)))
- (response/xexpr
- `(html (body (p ,(string-append "你好，" name))))))
+(define g
+  (generator ()
+    (yield 'a)
+    (yield 'b)
+    'finished))
+
+(check-equal? (g) 'a)
+(check-equal? (g) 'b)
+(check-equal? (g) 'finished)
+(check-equal? (generator-state g) 'done)
 ```
 
-`send/suspend` 把“拿到表单之后要继续执行的整段代码”——也就是那个 `define` 之后的所有内容——打包成延续存进服务器，并把一个绑定了这段延续的 URL 交给浏览器。用户提交时访问这个 URL，服务器就跳回那个延续，`send/suspend` 返回新的请求，代码继续往下跑。
+保存为 continuation-generator.rkt，运行 raco test continuation-generator.rkt。预期四项检查通过。下一章进一步讨论 yield 与可组合延续的关系。实际项目优先使用经过维护的标准库接口，而不是自行保存未经限定的调用者延续。
 
-**它把“等用户提交”这件本该异步、要拆成回调的事，写成了从上到下的同步流程。** 多页表单、带分支的会话，都能像普通函数一样顺序写下来。
+## Web 会话中的延续
+
+Racket web-server 的 send/suspend 可以暂停 servlet 的计算，并生成与该延续关联的 URL。浏览器随后请求该 URL 时，服务器可以将新的请求交给暂停的计算。
+
+这个机制可以表达多步骤表单，但不意味着会话具有无限生命周期，也不能替代身份认证、权限验证、CSRF 防护和持久化。服务器重启、延续过期或重复提交都需要单独考虑。有关具体接口，参阅 [Web Server 文档](https://docs.racket-lang.org/web-server/)，本书第七卷还将使用普通路由与显式状态实现 Web 应用。
 
 ## dynamic-wind：跳走之前，打扫干净
 
@@ -146,27 +116,41 @@ Python 的 `yield` 能把一个函数变成可以暂停、恢复的迭代器。R
 
 ```racket
 #lang racket
+(require rackunit)
 
+(define tag (make-continuation-prompt-tag 'wind-demo))
 (define saved-k #f)
+(define trace '())
+(define (record! item)
+  (set! trace (cons item trace)))
+(define (within thunk)
+  (call-with-continuation-prompt thunk tag))
 
-(dynamic-wind
- (λ () (displayln "[pre] 拿到锁")) ; 进入 body 时执行
- (λ () ; body
- (displayln "[body] 干活")
- (let/cc k (set! saved-k k)) ; 捕获延续
- (displayln "[body] 干完了"))
- (λ () (displayln "[post] 释放锁"))) ; 离开 body 时执行
+(within
+ (lambda ()
+   (dynamic-wind
+    (lambda () (record! 'enter))
+    (lambda ()
+      (record! 'before)
+      (call/cc (lambda (k) (set! saved-k k) 'first) tag)
+      (record! 'after))
+    (lambda () (record! 'leave)))))
 
-(saved-k 'replay)
+(check-equal? (reverse trace)
+              '(enter before after leave))
+(set! trace '())
+(within (lambda () (saved-k 'again)))
+(check-equal? (reverse trace)
+              '(enter after leave))
 ```
 
-第一次运行会打印 `[pre] / [body] 干活 / [body] 干完了 / [post]`。`(saved-k 'replay)` 跳回 body 里 `let/cc` 的位置——但因为是跳“进” `dynamic-wind` 的 body，`[pre]` 会再跑一遍；body 跑完后跳“出”去，`[post]` 又跑一遍。
+首次进入动态范围时依次记录 enter、before、after、leave。再次恢复延续时，进入动作重新运行，但捕获点之前的 before 不会重跑；恢复后的 after 与退出动作会执行。保存为 wind-demo.rkt，执行 raco test wind-demo.rkt，预期两项检查通过。
 
-**只要控制流进入或离开 `dynamic-wind` 的 body，对应的 pre 或 post 就会执行一次。** 这让延续在带资源管理的代码里也能安全使用：拿到什么，跳走时一定会放下。
+进入和退出函数需要按照可能多次进入、离开的语义设计。dynamic-wind 并不会自动恢复已经关闭的资源，也不是强制终止线程时的通用清理保证。
 
 ## 延续也有跨不过的边界
 
-延续不是无所不能。Racket 在很多边界自动安装 continuation barrier：加载模块、运行宏展开、调用异常处理器、命令行顶层求值，这些地方都会挡住 full continuation 的跳转。捕获的延续一旦跨越了 barrier，调用时就会抛 `exn:fail:contract:continuation` 异常。
+延续不是无所不能。Racket 会在一些控制上下文（例如宏转换器及异常处理器的调用）安装 continuation barrier。若应用延续需要进行不允许的跨边界控制转移，就会抛出 exn:fail:contract:continuation。匹配的 prompt 是否存在、延续的类型以及实际控制上下文共同决定操作是否合法。参阅 [Continuation Reference](https://docs.racket-lang.org/reference/cont.html)。
 
 这是有意为之——它把“乱跳”限制在了一个可控的范围里。日常应用代码几乎不会撞上这道墙，但要知道它在那儿。
 

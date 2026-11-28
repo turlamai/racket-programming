@@ -14,7 +14,7 @@ The book is free and needs no account. Chapters are educational material, not a 
 
 ## Book Structure
 
-Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: from plain confusion to theoretical foundations to hands-on practice.
+Seven volumes (60 chapters) + appendix (6 articles). The narrative arc goes: from plain confusion to theoretical foundations to hands-on practice.
 
 ### Part 1: 起点：编程与计算的本质 (Foundations)
 
@@ -22,7 +22,7 @@ Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: fro
 |---------|-------|
 | 1 | 写几行文字，电脑就会动 |
 | 2 | 两种回答——图灵机与λ演算 |
-| 3 | Racket 不是教学语言 |
+| 3 | Racket 不只是一门教学语言 |
 | 4 | 装好 Racket，认出 DrRacket 的两扇窗 |
 | 5 | 导读——为什么学、怎么读 |
 
@@ -68,12 +68,12 @@ Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: fro
 |---------|-------|
 | 27 | 面向对象——Racket 的 class 与对象 |
 | 28 | 第一个 GUI——窗口、按钮与点击计数器 |
-| 29 | 为什么 Racket GUI 写不出“现代界面” |
-| 30 | 8 种控件覆盖九成场景——按语义选 Racket GUI 控件 |
-| 31 | Racket GUI 控件清单——内置库一次看全 |
-| 32 | 自定义控件——子类化 canvas 自己画 |
-| 33 | gui-easy——声明式写 Racket GUI |
-| 34 | GUI 不卡顿——把耗时任务挪到后台线程 |
+| 29 | 从控件到应用——理解现代 GUI 的三条路线 |
+| 30 | Glaze——从零开发第一个桌面应用 |
+| 31 | Glaze——任务列表、界面布局与应用状态 |
+| 32 | Rivet——从 Racket 业务逻辑到平台原生窗口 |
+| 33 | Rivet——共享业务逻辑与平台原生界面 |
+| 34 | GUI 并发、测试与发布——让应用稳定运行 |
 
 ### Part 6: 语言设计与计算模型 (Language Design)
 
@@ -104,22 +104,25 @@ Seven volumes (60 chapters) + appendix (3 articles). The narrative arc goes: fro
 | 52 | 数据库是什么——从 Excel 到 SQL |
 | 53 | 从零开始用 Racket 写一个 Web Server |
 | 54 | 深入理解 Racket Web Server 的工作方式 |
-| 55 | Koyo——Racket Web 应用的现代工具箱 |
+| 55 | Loom——从零开发第一个 Web 应用 |
 | 56 | 稳定上线——给 Racket Web 程序配好 Nginx |
 | 57 | xexpr——HTML 是数据，不是字符串 |
 | 58 | FFI——当 Racket 需要调用 C |
 | 59 | 一个 Racket 程序员的工具箱 |
-| 60 | 如何构建和运行 ActivityLog2 |
+| 60 | Taskly——从源码到完整桌面产品 |
 
 ### Appendix (附录)
 
-Universal patterns for embedding Racket inside native applications, a complete guide to compiling Racket from source, and a dissection of Racket's language implementation.
+Embedding Racket, compiling Racket from source, language implementation, standard GUI controls, custom canvas drawing, and gui-easy.
 
 | # | Title |
 |---|-------|
 | 1 | 把 Racket 嵌进原生应用——嵌入式运行时的通用模式 |
 | 2 | Racket 编译完全指南 |
 | 3 | Racket 语言实现剖析 |
+| 4 | Racket GUI 标准控件与选型 |
+| 5 | 自定义控件与 Canvas |
+| 6 | gui-easy 声明式 GUI |
 
 ## Reader Feedback
 

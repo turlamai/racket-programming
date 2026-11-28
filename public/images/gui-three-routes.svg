@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 440" role="img" aria-labelledby="title desc">
+<title id="title">三种 GUI 技术路线</title><desc id="desc">共享业务逻辑分别连接 Racket 控件、Glaze WebView 和 Rivet 原生界面。</desc>
+<rect width="720" height="440" rx="16" fill="#FAF9F6"/>
+<g font-family="Inter, PingFang SC, Microsoft YaHei, system-ui, sans-serif" text-anchor="middle" fill="#2A2820">
+<rect x="180" y="25" width="360" height="70" rx="10" fill="#F5F3EE" stroke="#878278"/>
+<text x="360" y="54" font-size="22">Racket 业务逻辑</text><text x="360" y="79" font-size="16">数据 · 状态 · 规则 · 测试</text>
+<g stroke="#878278" stroke-width="2" fill="none"><path d="M360 95 V125 H125 V154 M360 125 V154 M360 125 H595 V154"/><path d="M125 222 V254 M360 222 V254 M595 222 V254"/></g>
+<g fill="#EBE8E0" stroke="#878278"><rect x="20" y="154" width="210" height="68" rx="8"/><rect x="255" y="154" width="210" height="68" rx="8"/><rect x="490" y="154" width="210" height="68" rx="8"/></g>
+<g font-size="22"><text x="125" y="184">racket/gui</text><text x="360" y="184">Glaze</text><text x="595" y="184">Rivet</text></g>
+<g font-size="15"><text x="125" y="207">控件与回调</text><text x="360" y="207">API Bridge</text><text x="595" y="207">类型化 RPC</text></g>
+<g fill="#FFE4D6" stroke="#A8532D"><rect x="20" y="254" width="210" height="110" rx="8"/><rect x="255" y="254" width="210" height="110" rx="8"/><rect x="490" y="254" width="210" height="110" rx="8"/></g>
+<g font-size="17"><text x="125" y="285">Racket 控件</text><text x="125" y="310">窗口与布局</text><text x="360" y="285">HTML / CSS / JS</text><text x="360" y="310">系统 WebView</text><text x="595" y="281">WinUI 3</text><text x="595" y="307">SwiftUI</text><text x="595" y="333">GTK4</text></g>
+<g font-size="15"><text x="125" y="398">共享控件 API</text><text x="360" y="398">共享 Web 界面</text><text x="595" y="398">各平台原生界面</text></g></g></svg>

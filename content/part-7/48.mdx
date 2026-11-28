@@ -9,7 +9,7 @@
 
 这篇的目标只有一个：
 
-> **让你第一次发布的 Racket 包，符合官方生态的基本预期，并成功进入官方包目录。**
+> 完成一个可本地安装、测试和构建文档的示例包，再了解目录登记过程。包名是否可用及远程构建结果需要实际验证。
 
 ## 什么样的包才算「合格」
 
@@ -36,18 +36,19 @@ my-first-pkg/
  └── test-main.rkt
 ```
 
-这是 Racket 官方生态中 **最常见、最稳妥** 的结构，新手不建议自行变形。
+这是一个单 collection 包的示例结构。多 collection 包或包含原生组件的包可以采用不同布局。
 
 ## 一个真实可发布的模块
+
+将以下内容保存为 main.rkt：
 
 ```racket
 #lang racket/base
 
 (require racket/contract)
 
-(provide add1-safe
- (contract-out
- [even? (-> exact-integer? boolean?)]))
+(provide (contract-out
+ [add1-safe (-> exact-integer? exact-integer?)]))
 
 (define (add1-safe x)
  (+ x 1))
@@ -62,13 +63,15 @@ my-first-pkg/
 
 ## info.rkt：包元数据的中枢
 
+保存为 info.rkt，并将作者邮箱替换为实际维护者的公开联系方式：
+
 ```racket
 #lang info
 
 (define collection "my-first-pkg")
 (define pkg-desc "My first Racket package")
 (define version "0.1.0")
-(define pkg-authors '("Your Name"))
+(define pkg-authors '("you@example.com"))
 
 (define deps '("base"))
 (define build-deps '("scribble-lib" "racket-doc" "rackunit-lib"))
@@ -82,7 +85,7 @@ my-first-pkg/
 
 ## 文档：不是 Catalog 硬门槛，但正式包应该有
 
-Package Catalog 并不把“必须有 Scribble 文档”当成所有包的硬性准入条件。不过，对准备给别人使用的正式包来说，文档几乎是必需品。
+Package Catalog 并不把“必须有 Scribble 文档”当成所有包的硬性准入条件。不过，对准备给别人使用的正式包来说，文档非常重要。将以下内容保存为 my-first-pkg.scrbl：
 
 ```racket
 #lang scribble/manual
@@ -96,7 +99,7 @@ Package Catalog 并不把“必须有 Scribble 文档”当成所有包的硬性
 
 @section{API}
 
-@defproc[(add1-safe [x integer?]) integer?]{
+@defproc[(add1-safe [x exact-integer?]) exact-integer?]{
 Adds 1 to @racket[x].
 }
 ```
@@ -109,6 +112,8 @@ Adds 1 to @racket[x].
 
 ## 测试：为构建而写
 
+创建 tests/test-main.rkt：
+
 ```racket
 #lang racket/base
 
@@ -116,24 +121,30 @@ Adds 1 to @racket[x].
  my-first-pkg)
 
 (check-equal? (add1-safe 1) 2)
-(check-true (even? 2))
+(check-equal? (add1-safe -1) 0)
+(check-exn exn:fail:contract?
+           (lambda () (add1-safe "1")))
 ```
 
-测试的目的不是覆盖率，而是确保包在官方构建环境中不会失败。
+测试应覆盖正常输入、边界与错误行为。先验证本地链接安装，再从源码重新安装；远程构建结果仍需独立检查。
 
 ```bash
-raco test .
+raco pkg install --auto --name my-first-pkg --link .
+raco test tests/test-main.rkt
+raco setup --pkgs my-first-pkg
 ```
 
 ## README 与 LICENSE
 
-README 至少应包含安装方式：
+发布前可先验证 `racket -e '(require my-first-pkg) (displayln (add1-safe 41))'`（在 PowerShell 中也可直接执行；其他 shell 按其引号规则调整），预期输出 42。完成练习后可使用 raco pkg remove my-first-pkg 删除本次链接安装，不会删除链接指向的源码目录。正式项目的包名应先检查是否与公共目录或已安装包冲突。
+
+README 至少应包含安装方式（以下远程安装命令只有在自己的同名包成功登记后才适用）：
 
 ```bash
 raco pkg install my-first-pkg
 ```
 
-LICENSE 建议选择常见协议（MIT / BSD / Apache-2.0）。
+选择符合项目目标的许可证，并提供对应的完整 LICENSE 文本。示例元数据选择 MIT，实际许可证文件必须与之相符。
 
 ## 发布
 
@@ -142,7 +153,7 @@ LICENSE 建议选择常见协议（MIT / BSD / Apache-2.0）。
 3. 选择 **Add Your Own Package**
 4. 填写包名与仓库地址并提交
 
-系统会自动执行构建、测试和文档生成。
+登记需要账户和可用的包名。目录会获取源码信息，构建服务另行尝试安装、测试及生成文档；登记成功不代表这些检查全部通过。
 
 发布成功后，你的包即可通过：
 
@@ -153,6 +164,8 @@ raco pkg install my-first-pkg
 进行安装。
 
 ## 版本与维护
+
+可以阅读 [Glaze](https://github.com/turlamai/glaze)、[Rivet](https://github.com/turlamai/rivet) 和 [Loom](https://github.com/turlamai/loom) 的项目元数据、测试及文档组织，比较真实工程与本章最小示例的差异。源码布局与发布状态以实际仓库为准，不要求初学者复制大型项目的全部结构。
 
 - 第一次发布使用 `0.1.0` 即可
 - 后续更新递增版本号
@@ -168,4 +181,4 @@ raco pkg install my-first-pkg
 - 信息完整
 - 能通过官方构建
 
-做到这些，你发布的就不是玩具包，而是一个 **正式进入 Racket 生态的官方包**。
+做到这些，你发布的就不是玩具包，而是一个 **在公共目录登记的第三方包，而非 Racket 官方维护或认证的包**。

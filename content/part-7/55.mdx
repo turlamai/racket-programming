@@ -1,138 +1,214 @@
-# Koyo——Racket Web 应用的现代工具箱
+# Loom——从零开发第一个 Web 应用
 
-> 想用 Racket 写个正经的 Web 应用，光靠内置的 web-server 会觉得缺这缺那。Koyo 给你补齐了现代 Web 应用所需的一整套工具，而且想用什么用什么，不强制绑定。
+> 上一章我们已经知道，Web 程序接收 HTTP 请求并返回响应。本章使用 Loom 把这件事组织成一个可以逐渐扩大的应用。
 
-读到上一章你可能已经发现：Racket 内置的 web-server 能把服务跑起来，但要写个「正经」应用——配置、开发期自动重载、数据库迁移、部署脚本——就得自己一样样攒。Koyo 把这些攒好了：它是社区为 Racket Web 开发做的一整套现代工具箱，而且按需取用，不强制绑定。
+## 从一个问题开始
 
-## Koyo 是什么？
+假设你想做一个任务管理网站。浏览器访问首页时应该显示任务列表，访问某个任务的地址时应该显示它的详细信息。服务器怎么知道浏览器究竟想看哪一页？
 
-Koyo 是一个基于 Racket 的 Web 应用开发工具包。它不只是简单地包装 Racket 内置的 web-server，而是提供了一套面向真实应用的工程组件，覆盖许多常见的现代 Web 开发需求。
+浏览器发出的请求包含方法和路径。例如，GET /tasks/42 表示客户端希望读取路径 /tasks/42 对应的资源。服务器需要找到负责处理它的函数。把请求映射到处理函数的过程叫作路由（routing）。
 
-最妙的是，Koyo 的所有组件都是 **解耦** 的。你想用什么就用什么，不想用的就丢掉——没有强制绑定的全家桶。
+Loom 是一个以 Racket 为中心的 Web 框架。本章使用它组织路由和生成 HTML；它建立在 Racket 的 web-server 之上，而不是另一种 HTTP 协议。
 
-## 为什么选择 Koyo？
+## 安装与版本说明
 
-如果你的团队成员对 Racket 的理解仅限于 “ 听说过 ”，Koyo 的这几个特性会让你觉得相见恨晚：
+Loom 目前处于早期开发阶段，接口可能变化。以下示例依据 [Loom 源码](https://github.com/turlamai/loom) 的开发版本编写。暂不假定它已在 Racket Package Catalog 发布，也不假定完整的生产功能已经实现。
 
-### 1. 蓝图系统：秒速启动项目
-
-别再纠结项目结构怎么搭了。运行一条命令，框架就帮你生成一个完整的项目骨架：
+先安装 Racket 和 Git（Git 用于取得源码），打开终端：
 
 ```bash
-$ raco pkg install koyo
-$ raco koyo new my-app # 或者 raco koyo new -b minimal my-app
-$ cd my-app
+git clone https://github.com/turlamai/loom.git
+cd loom
+raco pkg install --auto --name loom-dev --link "$(pwd)"
+raco test loom/main.rkt
+racket examples/hello.rkt
 ```
 
-Koyo 提供了三种蓝图模板（minimal、standard、saas），分别适合不同规模的项目。生成的项目结构清晰明了：
+上面的路径写法适用于常见的 Unix shell；Windows PowerShell 可将最后一个安装参数写成 `(Get-Location).Path`。
 
-```text
-my-app/ # 应用逻辑
-my-app-tests/ # 测试
-migrations/ # 数据库迁移
-resources/ # 资源文件（翻译、样式、脚本等）
-static/ # 编译后的静态文件
-.env.default # 默认环境变量
-Procfile # 进程配置（用于 chief）
-package.json # 前端依赖
+打开浏览器访问 http://127.0.0.1:8080/。如果终端报告端口被占用，先停止占用端口的旧开发服务，或在自己的程序中通过 serve 的 #:port 参数指定其他端口。结束开发服务时，在终端按 Ctrl+C。
+
+这里的 127.0.0.1 是回环地址，指向运行浏览器的这台计算机。这一步只是在本地学习，并没有把网站发布到互联网上。
+
+## 写出第一个页面
+
+新建 main.rkt，输入：
+
+```racket
+#lang racket/base
+(require loom)
+
+(define (home req)
+  (html-response
+   '(html
+     (head (title "我的任务"))
+     (body (h1 "今天要做什么？")))))
+
+(define app
+  (make-app
+   (list (route #"GET" "/" home))))
+
+(module+ main
+  (serve app))
 ```
 
-### 2. 交互式控制台：开发效率倍增器
+执行 `racket main.rkt`，在浏览器打开刚才的地址。
 
-Koyo 的杀手锏是其交互式 REPL：
+这里有四件事：
+
+- home 是一个普通函数，参数 req 代表收到的请求。
+- html-response 将 Racket 列表表示的 HTML 转换为 HTTP 响应。这种树形表示叫 xexpr，后面的第 57 章会详细解释。
+- route 将 GET 方法和 / 路径关联到 home。注意 #"GET" 是字节字符串，不是普通字符串。
+- make-app 根据路由列表构造处理请求的应用；serve 则启动服务器。
+
+module+ main 让服务器在直接执行文件时启动，而不是在其他模块导入文件时立即启动。这为测试留下了空间。
+
+![Loom 中一次 HTTP 请求的处理过程](/images/loom-request-flow.svg)
+
+## 让页面接收数据
+
+再添加一个任务详情页。假设任务编号是路径中的一部分：/tasks/42。
+
+在 home 和 app 的定义之间加入以下函数：
+
+```racket
+(define (task-detail req)
+  (define id (route-param "id"))
+  (html-response
+   `(html
+     (head (title "任务详情"))
+     (body (h1 ,(string-append "任务 " id))))))
+```
+
+把 app 的定义替换为：
+
+```racket
+(define app
+  (make-app
+   (list (route #"GET" "/" home)
+         (route #"GET" "/tasks/:id" task-detail))))
+```
+
+重新启动程序，访问 http://127.0.0.1:8080/tasks/42。页面应该显示“任务 42”。将地址中的 42 换成 99，观察页面如何变化。
+
+:id 是一个路径参数占位符。Loom 在请求匹配时提取实际路径片段，route-param 再从当前请求的参数中取出它。反引号和逗号让我们能够在列表结构中插入计算结果，而不必手工拼接整段 HTML。
+
+注意：这个示例只展示了编号，不代表数据库中真的存在这个任务。真实应用还需要查询数据、检查用户权限，并在任务不存在时返回相应的错误响应。
+
+## 观察 HTTP 的行为
+
+不妨在另一个终端中运行以下命令（Windows 下如果 curl 是 PowerShell 的别名，请使用 curl.exe）：
 
 ```bash
-$ raco koyo console
+curl -i http://127.0.0.1:8080/tasks/42
+curl -i http://127.0.0.1:8080/missing
+curl -i -X POST http://127.0.0.1:8080/tasks/42
 ```
 
-启动后，你可以通过简洁的语法访问应用的所有组件：
+依据本章所用接口，三个请求应分别得到 200、404 和 405。200 表示请求成功，404 表示没有找到匹配路径，405 表示该路径不接受请求使用的方法。这样，我们不仅观察页面是否出现，还验证了服务器对不同请求的处理结果。
+
+## 把业务逻辑留在 Racket 中
+
+回想前面的 GUI 章节：一个任务首先是数据，不是屏幕上的矩形。在 Web 应用里也是如此。我们可以继续使用结构体、纯函数和 RackUnit 测试表达任务的规则，再让 Loom 处理请求、调用函数并生成页面。
+
+当同一个应用还需要桌面版本时，Glaze 和 Rivet 可以采用同样的业务逻辑。不同的是界面和交互入口，而不是任务本身的定义。
+
+## 从页面进阶到真实任务管理应用
+
+前面的页面只演示路由，尚未保存任务。Loom 仓库现在维护了 [Taskboard 示例](https://github.com/turlamai/loom/tree/HEAD/examples/taskboard)，它把路由、HTML、表单、数据模型、SQLite、会话和 CSRF 防护组合起来。
+
+在已安装依赖的 Loom 源码根目录运行：
+
+```sh
+racket examples/taskboard/app.rkt
+```
+
+先停止前面的 8080 端口服务，再启动 Taskboard 并访问 http://127.0.0.1:8080/。输入一个任务标题，点击 Add，再试着 Toggle 和 Delete。关闭并重新启动服务，观察数据是否还在。
+
+默认数据库文件为 taskboard.db。练习时建议使用独立数据库文件，环境变量 LOOM_TASKBOARD_DB 可以指定其位置，LOOM_TASKBOARD_PORT 可以调整端口。不要删除已有业务数据来重置练习环境。
+
+## HTML 表单如何发起修改
+
+浏览器中的表单包含输入框与提交按钮。点击提交时，浏览器根据表单指定的方法与地址发起 HTTP 请求。例如，Taskboard 通过 POST /tasks 添加任务。
+
+GET 用于读取页面，POST 用于提交改变业务状态的请求。HTTP 方法并不会自动阻止程序错误地修改状态，因此应用仍须遵守安全方法的语义。
+
+![Loom Taskboard 的表单提交、数据库事务和重新读取流程](/images/loom-taskboard-flow.svg)
+
+实际示例使用下面的路由表（摘自 app.rkt，需要原模块中的处理函数和中间件定义）：
 
 ```racket
-;; 使用 @ 符号快速访问组件
-> @database
-;; 或者
-> (system-ref 'database)
-
-;; 启动/停止系统
-> (start)
-> (stop)
+(make-app
+ (list (route #"GET" "/" home)
+       (route #"POST" "/tasks" create)
+       (route #"POST" "/tasks/:id/toggle" (change #f))
+       (route #"POST" "/tasks/:id/delete" (change #t)))
+ #:middleware
+ (list security-headers
+       (form-csrf-protection store #:secure? #f #:max-bytes 4096)))
 ```
 
-这个控制台让你可以：
-- 快速查询和修改数据库
-- 测试各个组件的功能
-- 实时调试问题
-- 运行任意 Racket 代码
+中间件是包在处理函数外面的另一层函数：它可以在调用内部处理函数之前验证请求，也可以在返回响应时补充响应头。本例的非 Secure cookie 设置仅适用于 localhost HTTP 演示。
 
-对于习惯了 Rails console 的开发者来说，这简直是如虎添翼。
+## 数据模型与持久化
 
-### 3. 类型安全的配置系统
-
-告别魔法字符串和配置地狱。Koyo 的配置系统基于环境变量，支持类型安全的选项定义：
+Taskboard 在后端声明了任务模型和仓库：
 
 ```racket
-;; 在 config.rkt 中定义配置
-(define-option port "PORT" 8000) ; 默认端口 8000
-(define-option database-url "DATABASE_URL" "postgres://localhost/db")
+(define-model task
+  [id string #t]
+  [title string #t]
+  [done boolean #t])
+
+(define tasks
+  (make-repository task #:table 'tasks #:key 'id))
 ```
 
-开发环境可以使用 `.env.default` 提供默认配置。Koyo 的部署工具链通常先用 `raco koyo dist` 生成发行目录，再用 `raco koyo deploy` 部署；`-e NAME VALUE` 可以在部署时补充单个环境变量。具体服务管理和反向代理布局应以当前 Koyo 部署文档与目标服务器配置为准。
+这段代码依赖 loom/model 和 loom/repository。模型中的 #t 表示必填字段。仓库将显式模型映射到已有的 SQLite 表，它不自动创建表，也不替代授权检查。真实示例使用 loom/migrate 创建表，使用参数化查询与事务保存修改。
 
-## 开发工作流一览
+一次创建任务会先读取已验证的表单字段，再检查标题是否为 1 至 200 个字符，之后生成随机 ID，插入新记录并返回重定向。事务成功结束后，浏览器重新读取首页。这种模式通常称为 POST/Redirect/GET，有助于避免刷新页面时重复提交表单，但不等于服务端已经实现幂等性。
 
-Koyo 的开发流程简单直观：
+## 阅读真实创建任务的逻辑
 
-```mermaid
-graph LR
- A[创建项目] --> B[运行 raco koyo serve]
- B --> C[编写业务逻辑]
- C --> D[使用控制台调试]
- D --> E[编写测试]
- E --> F[部署上线]
+当前 app.rkt 中的 create 使用 mutation 包装数据库事务，核心逻辑如下（摘录自原模块）：
+
+```racket
+(define (create req)
+  (mutation req (lambda (c fields)
+    (match (form-values fields "title")
+      [(list title)
+       (define clean (string-trim title))
+       (if (<= 1 (string-length clean) 200)
+           (begin
+             (repository-insert! c tasks
+               (hasheq 'id (random-id) 'title clean 'done #f))
+             (redirect-local "/"))
+           (error-page 400 "Title must be 1 to 200 characters"))]
+      [_ (error-page 400 "Expected one title")]))))
 ```
 
-你可以选择：
-- **简单模式**：直接用 `raco koyo serve` 运行
-- **专业模式**：使用 [chief](https://github.com/Bogdanp/racket-chief)（它会在后台自动编译前端资源并启动服务器）
+form-values 可能返回零个、一个或多个值，因此使用 match 要求恰好一个标题。mutation 从 current-verified-form 取得通过中间件验证的表单，在 with-db 和 with-transaction 的边界内执行操作。不能将客户端 required 属性当作后端验证。
 
-## 核心架构：组件化设计
+当前首页调用 repository-list，并指定 #:limit 100；这是有限列表展示，不是完整分页功能。需要支持更多任务时，还应设计分页、稳定排序和查询界面。
 
-Koyo 的架构设计理念非常现代——**基于组件的架构**。每个功能模块（数据库、会话、任务队列等）都是独立的组件，通过依赖注入组合在一起。
+## 为什么还需要会话和 CSRF
 
-这种设计带来的好处：
-- **模块化**：每个组件职责单一，易于理解和维护
-- **可测试性**：组件可以独立测试，也可以用 mock 替换
-- **灵活性**：需要什么功能就引入什么组件，没有不必要的依赖
+HTTP 不要求每次请求自动继承此前请求的上下文。Cookie 可以让浏览器在后续请求携带一个标识，服务器通过该标识查询会话状态。
 
-## 开箱即用的功能清单
+CSRF（跨站请求伪造）指第三方页面诱导浏览器向目标网站发送带有用户凭据的请求。Taskboard 为浏览器会话关联随机令牌，表单提交时由中间件验证令牌是否正确。仅检查请求是 POST 并不能防止这种问题。
 
-Koyo 及其配套组件覆盖了许多常见的 Web 应用功能，例如：
+本例提供独立浏览器会话和 CSRF 令牌，但任务数据库仍是共享的。它没有实现用户认证、按用户隔离数据或完整授权机制；会话也保存在进程内，重启会失效。不要直接将它公开部署为多用户服务。
 
-- HTTP 服务器和中间件
-- 数据库连接池和事务管理
-- 会话管理和 CSRF 防护
-- 任务队列和定时任务（Crontab）
-- 静态文件服务
-- 模板引擎（HAML）
-- 邮件发送
-- 日志系统
-- 性能分析器
-- 测试工具
-- 部署工具
+## 验收
 
-## 给 Racket 新手的建议
+在 Linux 环境中安装 curl 和 Python 3 后，从 Loom 源码根目录执行：
 
-如果你之前没怎么用过 Racket，别担心。Koyo 的文档非常友好，建议按照这个学习路径循序渐进：
+```sh
+bash examples/taskboard/smoke.sh
+```
 
-1. **快速开始**：创建第一个项目，了解基本结构
-2. **项目结构**：熟悉蓝图系统和目录组织
-3. **配置管理**：掌握环境变量的使用
-4. **交互式控制台**：体验 REPL 的强大功能
+这是 Loom 仓库现有的 HTTP 验收入口。脚本使用临时数据库和 18880 端口，验证缺失令牌、跨会话令牌和无会话请求均被拒绝，并验证添加、文本转义、切换、删除与错误方法。它不会自动证明所有重启恢复、并发写入或公开部署场景。除此以外，还应手动检查添加、完成、删除、重启恢复以及非法表单被拒绝的情况。
 
-当你习惯了 Racket 的括号和语法后，你会发现这种表达方式的优雅和强大。Koyo 只是帮你搭建了一个现代化的舞台，真正的精彩表演还得靠你自己。
+练习：对照第 31、33 章的桌面任务管理器，指出三种应用中哪些规则属于纯 Racket 业务逻辑，哪些属于界面或协议边界。三个官方示例并非共享同一个源文件或相同的数据格式。
 
-## 总结
-
-Koyo 不是试图用 Racket 复制一个 Rails 或 Django，而是提供了一个 **真正适合 Racket 哲学** 的 Web 开发工具箱。它尊重你的选择权，提供合理的默认值，同时不限制你的发挥空间。
-
-如果你已经懂一些 Racket，或者只是想体验一下函数式编程在 Web 开发中的魅力，Koyo 值得一试。
+下一章介绍通用的反向代理和进程管理知识，并不意味着 Loom 开发预览版已经满足生产部署条件。

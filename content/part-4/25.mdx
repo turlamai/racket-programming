@@ -2,7 +2,7 @@
 
 > 红绿灯自己会变——红灯到时间变绿，绿灯到时间变黄，黄灯又回到红。这件再普通不过的事，拆开看就是三件事：状态、转移、驱动。把三件事各写一段代码，一个会自己切换的红绿灯就跑起来了。
 
-你天天见红绿灯，但有没有想过它到底“在跑什么”？大多数路口的红绿灯不看你有没有车，也不按按钮——它只是在一个固定节奏上，把当前的颜色换成下一个，周而复始。
+你天天见红绿灯，但有没有想过它到底“在跑什么”？本章先构造一个固定节奏的单组信号灯模型，暂不考虑车辆检测、行人请求、交叉口冲突和安全联锁。它用于学习状态机，不用于实际交通信号控制。
 
 命令式编程的核心一句话能讲完：让某个状态在循环里不断改变。但“状态随时间改变”这种说法太抽象，听着像定义，不像程序。这篇用一个红绿灯把它钉死。钉死之后你会发现，所谓状态机，就是三件事——状态、转移、驱动。
 
@@ -18,9 +18,9 @@
 
 状态、转移、驱动，缺一不可。没有状态，程序不知道“现在在哪”；没有转移，它不知道“下一步去哪”；没有驱动，它永远停在原地。
 
-**这三件事凑齐，就是一台状态机。**
+这三部分构成本章的可执行状态机模型。一般状态机还可包含事件、初始状态、转移条件及动作。
 
-![traffic-light-state-machine](/images/traffic-light-state-machine.svg)
+![简化红绿灯的三种状态、定时转移和驱动规则](/images/traffic-light-state-machine.svg)
 
 ## 状态：用 symbol 给颜色起个名
 
@@ -59,7 +59,8 @@ Racket 里表示“红灯”，最自然的写法是 `'red`——前面一个引
  (case state
  [(red) 'green]
  [(green) 'yellow]
- [(yellow) 'red]))
+ [(yellow) 'red]
+ [else (raise-argument-error 'next "red, green, or yellow symbol" state)]))
 ```
 
 `case` 拿一个值去匹配，每条 `[(red) 'green]` 读作：碰到 `'red`，就给 `'green`。当前是 `'red` 给 `'green`，是 `'green` 给 `'yellow`，是 `'yellow` 绕回 `'red`。
@@ -94,9 +95,14 @@ Racket 里表示“红灯”，最自然的写法是 `'red`——前面一个引
  (case state
  [(red) 'green]
  [(green) 'yellow]
- [(yellow) 'red]))
+ [(yellow) 'red]
+ [else (raise-argument-error 'next "red, green, or yellow symbol" state)]))
 
 (define (run state rounds)
+ (unless (memq state '(red green yellow))
+   (raise-argument-error 'run "traffic-light state" state))
+ (unless (exact-nonnegative-integer? rounds)
+   (raise-argument-error 'run "exact-nonnegative-integer?" rounds))
  (for ([i (in-range rounds)])
  (displayln state) ; 打印当前状态
  (flush-output) ; 立刻刷到屏幕
@@ -123,19 +129,19 @@ yellow
 
 三行小注解：`displayln` 打印并换行；`flush-output` 强制把这一行立刻送到屏幕，不然输出可能攒在缓冲区里、最后一口气全吐出来；`sleep 1` 暂停 1 秒，参数是秒，也能写 `0.5`。
 
-同一台机器，换个不靠 `set!` 的写法——递归：
+同一台机器，换个不靠 set! 的写法——递归。下面的 run/recursive 假定状态和轮数已合法：
 
 ```racket
-(define (run state rounds)
+(define (run/recursive state rounds)
  (cond
  [(zero? rounds) (void)]
  [else (displayln state)
  (flush-output)
  (sleep 1)
- (run (next state) (sub1 rounds))]))
+ (run/recursive (next state) (sub1 rounds))]))
 ```
 
-这里没有任何赋值——每一轮递归，把“下一个状态”作为参数传给自己。“状态随时间改变”照样成立，只是“时间”变成了递归的层数，“状态”变成了那个参数。同一台机器，两种驱动方式：一个靠改变量，一个靠传参数。
+这里没有任何赋值——每一轮递归，把“下一个状态”作为参数传给自己。“状态随时间改变”照样成立，只是驱动步骤由递归调用表示，实际时间仍由等待操作决定，“状态”变成了那个参数。同一台机器，两种驱动方式：一个靠改变量，一个靠传参数。
 
 | | `for` + `set!` | 递归 |
 |---|---|---|
@@ -157,7 +163,7 @@ racket traffic.rkt
 
 ## 让它更像真红绿灯：每个灯亮不同时长
 
-真路口的红绿灯，绿灯亮得久，黄灯一闪就过。给每个状态配一个时长，状态机就开始贴近现实：
+在教学模型中，给不同状态配上不同等待时长，可以观察定时规则与转移规则如何分离。下面的秒数只是演示参数，不是交通工程建议：
 
 ```racket
 #lang racket
@@ -166,13 +172,15 @@ racket traffic.rkt
  (case state
  [(red) 'green]
  [(green) 'yellow]
- [(yellow) 'red]))
+ [(yellow) 'red]
+ [else (raise-argument-error 'next "red, green, or yellow symbol" state)]))
 
 (define (duration state)
  (case state
  [(red) 3]
  [(green) 5]
- [(yellow) 1]))
+ [(yellow) 1]
+ [else (raise-argument-error 'duration "red, green, or yellow symbol" state)]))
 
 (define (run state rounds)
  (cond
@@ -185,15 +193,36 @@ racket traffic.rkt
 (run 'red 6)
 ```
 
-现在红灯停 3 秒、绿灯 5 秒、黄灯 1 秒。三件事的结构一个没动——状态还是那三个 symbol，转移还是那个 `next`，只把“等多久”从写死的 `1` 换成了查表。
+这个版本的 run 假定状态合法且 rounds 是非负精确整数，实际应用应保留前面版本的入口校验。现在红灯等待约 3 秒、绿灯约 5 秒、黄灯约 1 秒。sleep 不是实时定时器，调度和输出等操作会增加额外延迟。三件事的结构一个没动——状态还是那三个 symbol，转移还是那个 `next`，只把“等多久”从写死的 `1` 换成了查表。
 
 **状态机的好处在这里显出来了：每个状态可以自带数据（时长、计数、分数），规则不变，行为更丰富。**
+
+## 不等待时钟，直接测试转移规则
+
+将下面的代码附加到包含 next 和 duration 的模块：
+
+```racket
+(module+ test
+  (require rackunit)
+  (check-equal? (next 'red) 'green)
+  (check-equal? (next 'green) 'yellow)
+  (check-equal? (next 'yellow) 'red)
+  (check-exn exn:fail:contract? (lambda () (next 'blue)))
+  (check-equal? (map duration '(red green yellow)) '(3 5 1))
+  (check-equal?
+   (let loop ([s 'red] [n 6])
+     (if (zero? n) '()
+         (cons s (loop (next s) (sub1 n)))))
+   '(red green yellow red green yellow)))
+```
+
+为了避免执行实际等待，请把模块末尾的 `(run 'red 6)` 改为 `(module+ main (run 'red 6))`。保存为 traffic.rkt 后，执行 `raco test traffic.rkt`，预期六项检查通过；执行 `racket traffic.rkt` 才启动演示。业务规则与驱动分开后，测试无需依赖真实时间。
 
 ## 想要画面：big-bang 是另一条驱动
 
 终端里一行行打印，已经能看清这台机器在跑。如果你想要一个真窗口、三个会变色的圆，Racket 的 `2htdp/universe` 给了 `big-bang`：你给它一个初始状态、一个按时钟触发的 tick 处理器（就是你的 `next`），再给一个按状态画圆的绘图函数。
 
-状态、转移两件事一字不改——变的只是驱动，从 `sleep` 循环换成 `big-bang` 的时钟，再额外加一件“画”。这一篇先用命令行把三件事讲透，画面留到你想要个能炫耀的演示时再说。
+对于固定 tick 间隔的最简版本，状态和转移函数可以复用；若要实现各状态不同的持续时间，还需在驱动中记录经过的时间。主要变化是驱动，从 `sleep` 循环换成 `big-bang` 的时钟，再额外加一件“画”。这一篇先用命令行把三件事讲透，画面留到你想要个能炫耀的演示时再说。
 
 ## 状态机无处不在
 

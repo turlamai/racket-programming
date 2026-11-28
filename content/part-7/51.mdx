@@ -8,9 +8,9 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 
 ## 命名与缩进
 
-**命名用 kebab-case**：`validate-input`，不是 `validateInput`，更不是 `validate_input`。这是 Lisp 世界的通用习惯，Racket 标准库从头到尾都是这个风格。
+**命名用 kebab-case**：`validate-input`，不是 `validateInput`，更不是 `validate_input`。这是 Lisp 世界的通用习惯，这是常见约定，并非所有库都采用完全相同的命名方式。
 
-**缩进跟着结构走**：每个层级 2 个空格，禁用 Tab 字符。
+**缩进跟着结构走**：优先使用编辑器的 Racket 结构缩进规则；不同语法形式的对齐方式不完全相同。
 
 ```racket
 (define (factorial n)
@@ -18,7 +18,7 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
         [else (* n (factorial (- n 1)))])) ; 递归情况缩进对齐
 ```
 
-**括号交给编辑器管**：括号怎么排不要手写手调——第 50 章的 paredit 就是干这个的，它保证你的括号永远不会失衡。
+**括号交给编辑器管**：括号怎么排不要手写手调——第 50 章的 paredit 就是干这个的，它帮助保持括号平衡，不能替代语法检查与测试。
 
 ## 模块长什么样
 
@@ -27,19 +27,25 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ```racket
 #lang racket
 
-(require racket/contract
-         rackunit)
+(require racket/contract)
 
 (provide (contract-out
           [string->safe-port-number (-> string? (integer-in 1 65535))]))
 
 ;; 将字符串转换为合法的端口号
 (define (string->safe-port-number str)
+  (unless (regexp-match? #px"^[0-9]+$" str)
+    (raise-argument-error 'string->safe-port-number
+                          "decimal digits only" str))
   (define port (string->number str))
-  (unless (and (integer? port) (<= 1 port 65535))
-    (error 'invalid-port))
+  (unless (and (exact-integer? port) (<= 1 port 65535))
+    (raise-argument-error 'string->safe-port-number
+                          "decimal port number from 1 to 65535"
+                          str))
   port)
 ```
+
+这个接口特意只接受 ASCII 十进制数字，不接受 80.0、1/1、#x50 或带空格的文本；允许前导零。这是应用自行选择的配置语法，不是所有端口解析器必须遵守的规则。
 
 一眼看过去，读的人先看到 `provide`：这个模块给外界什么、各是什么类型。实现细节全部排在后面。
 
@@ -48,15 +54,18 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 **`cond` 优于嵌套 `if`**。多分支时嵌套 `if` 会越埋越深，`cond` 把所有分支平铺在同一列：
 
 ```racket
-;; 反模式
+;; 示例输入
+(define x 50)
+;; 嵌套写法
 (if (positive? x)
     (if (> x 100)
         'large
         'small)
-    'negative)
+    'non-positive)
 
 ;; 推荐模式
-(cond [(positive? x) (if (> x 100) 'large 'small)]
+(cond [(> x 100) 'large]
+      [(positive? x) 'small]
       [else 'negative])
 ```
 
@@ -76,7 +85,9 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ;; @param p1 点1 (cons x y)
 ;; @param p2 点2 (cons x y)
 ;; @return 两点间的直线距离
-(define (distance p1 p2) ...)
+(define (distance p1 p2)
+  (sqrt (+ (sqr (- (car p1) (car p2)))
+           (sqr (- (cdr p1) (cdr p2))))))
 ```
 
 测试就近放在模块的 `module+ test` 里，用 `rackunit`：
@@ -84,11 +95,18 @@ Lisp 的语法简洁是把双刃剑：写起来快，读起来快不快，全看
 ```racket
 (module+ test
   (require rackunit)
-  (check-equal? (add1 41) 42)
-  (check-exn exn:fail? (λ () (string->safe-port-number "99999"))))
+  (check-equal? (string->safe-port-number "8080") 8080)
+  (check-exn exn:fail? (lambda () (string->safe-port-number "80.0")))
+  (check-exn exn:fail:contract? (lambda () (string->safe-port-number "99999")))
+  (check-equal? (string->safe-port-number "1") 1)
+  (check-equal? (string->safe-port-number "65535") 65535)
+  (check-equal? (string->safe-port-number "00080") 80)
+  (for ([bad '("0" "65536" "1/1" "#x50" " 80" "" "80\n")])
+    (check-exn exn:fail:contract?
+               (lambda () (string->safe-port-number bad)))))
 ```
 
-测试跟代码住在同一个文件里，改函数的时候顺手就能跑。
+将测试附加到开头的端口模块，保存为 port-number.rkt，执行 raco test port-number.rkt，预期十三项检查通过。测试子模块直接调用内部定义，验证实现的校验逻辑；如需验证导出契约，还应从独立模块调用。
 
 ## 让规范自己长出来
 

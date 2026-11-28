@@ -1,6 +1,6 @@
 # 从零开始用 Racket 写一个 Web Server
 
-> Web 开发听起来是一堆陌生名词，但剥到本质就是一件事：一次请求，一次响应——和函数调用没有区别。这篇用 Racket 把这件事赤裸裸摆给你看。
+> Web 开发听起来是一堆陌生名词，但剥到本质就是一件事：一次请求，一次响应——可以借助函数调用理解，但还存在网络、协议和失败边界。这篇用 Racket 把这件事赤裸裸摆给你看。
 
 很多人一听到 “Web 开发”，脑子里立刻冒出一串陌生名词：HTML、CSS、JavaScript、前端框架、后端框架……
 
@@ -14,7 +14,7 @@
 
 ## 一、先别谈“网页”，我们谈“对话”
 
-在最本质的层面，Web 并不神秘，它只是一次 **远程函数调用**。
+在最本质的层面，Web 并不神秘，可以先把请求处理想象为一次跨网络的函数调用，但 HTTP 并不等同于 RPC。
 
 你可以这样理解：
 
@@ -33,6 +33,18 @@
 
 Racket 的 Web Server 几乎就是把这件事 **赤裸裸地摆在你面前**。
 
+## 认识 URL 与 HTTP 报文
+
+以 http://127.0.0.1:8000/hello?name=Racket 为例：http 是协议方案，127.0.0.1 是回环地址，8000 是端口，/hello 是路径，name=Racket 是查询字符串。浏览器将这些信息组织成 HTTP 请求。下面是简化的 HTTP/1.1 文本示意：
+
+```text
+GET /hello?name=Racket HTTP/1.1
+Host: 127.0.0.1:8000
+
+```
+
+请求行包含方法、请求目标和协议版本；Host 是请求头。空行标志头部结束。此 GET 请求没有请求体。HTTP/2 和 HTTP/3 的传输编码不同，不应把这个文本例子当作所有 HTTP 版本的线缆格式。HTTPS 在传输中使用加密与身份验证，本地练习使用普通 HTTP。
+
 ## 二、你的第一个 Racket Web Server
 
 ### 1 准备环境
@@ -43,7 +55,7 @@ Racket 的 Web Server 几乎就是把这件事 **赤裸裸地摆在你面前**�
 
 ### 2 最小可运行示例
 
-新建一个文件：
+新建 hello-web.rkt：
 
 ```racket
 #lang racket
@@ -61,11 +73,13 @@ Racket 的 Web Server 几乎就是把这件事 **赤裸裸地摆在你面前**�
 
 (serve/servlet start
  #:port 8000
+ #:listen-ip "127.0.0.1"
+ #:servlet-regexp #rx""
  #:servlet-path "/"
  #:launch-browser? #t)
 ```
 
-运行这个文件。
+执行 racket hello-web.rkt，访问 http://127.0.0.1:8000/。若浏览器没有自动打开，请手动输入地址。结束服务使用 Ctrl+C。
 
 你会看到浏览器自动打开，页面上显示：
 
@@ -147,6 +161,8 @@ Racket Web Server 的设计思想非常 Lisp：
 
 ### 1 读取请求路径
 
+先停止原服务，将 start 定义替换为下面的函数，保留 require 和 serve/servlet，再重新运行。下面的手写路由仅演示路径匹配，未按 HTTP 方法分发，也没有完整的路径规范化策略。第 55 章将使用 Loom 的路由接口。
+
 ```racket
 (define (start request)
  (define path
@@ -191,6 +207,8 @@ http://localhost:8000/hello?name=Racket
 
 ### 1 读取参数
 
+这是另一个独立实验：替换上一节的 start，保留启动代码。它会对所有匹配的路径返回问候页，并不保留上一节的路由行为。
+
 ```racket
 (define (start request)
  (define query (url-query (request-uri request)))
@@ -218,7 +236,7 @@ http://localhost:8000/hello?name=Racket
 
 很多教程一上来就引入模板系统，这对新手非常不友好。
 
-先用字符串，完全没问题：
+固定的可信 HTML 字符串可以作为入门示例；动态用户输入不要直接拼进 HTML，应使用结构化构造器及适当的安全校验：
 
 ```racket
 (define (start request)
@@ -239,7 +257,18 @@ http://localhost:8000/hello?name=Racket
 
 等你理解了 Web 的“函数本质”，再学习 HTML 生成 DSL，会非常自然。
 
-## 七、Racket Web Server 的“哲学优势”
+## 用客户端验证响应
+
+恢复第四节的路由版本并运行服务，然后在另一个终端执行：
+
+```sh
+curl -i http://127.0.0.1:8000/hello
+curl -i http://127.0.0.1:8000/missing
+```
+
+预期分别收到 200 与 404。-i 会显示响应头和响应体。Windows 可使用 curl.exe。浏览器显示的页面和 HTTP 状态码是两个不同的观察维度，不能只凭页面文字判断请求成功。
+
+## 七、Racket Web Server 的编程模型
 
 如果你来自 C / 嵌入式/函数式背景，你会发现：
 

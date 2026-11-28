@@ -23,14 +23,14 @@
 ```bash
 # 安装远程包
 
-raco pkg install some-package
+raco pkg install --auto rackunit-lib
 
 # 本地开发模式（推荐）
 
 raco pkg install --link .
 ```
 
-`--link` 值得单独说一句：它不把包复制进安装目录，而是"链接"到你的本地源码。你在源码里改一行，系统里立刻生效——这是自己开发包时的标准工作方式。
+`--link` 值得单独说一句：它不把包复制进安装目录，而是"链接"到你的本地源码。链接安装使包指向源码目录；已运行进程中的模块通常仍需重新加载或重启，元数据和文档变更也可能需要 setup——这是自己开发包时的标准工作方式。
 
 还有一个认知要建立：**Racket 的包不只是库**。一个包可以同时装着库代码、可执行程序、文档、甚至 `raco` 的工具扩展。你发布一个包，可以同时给生态提供库和命令。
 
@@ -46,7 +46,7 @@ raco exe main.rkt
 
 ## raco setup：出怪事先找它
 
-`raco setup` 是最容易被忽视、又最常救你命的一个：编译新装的包、重建文档索引、检查依赖一致性、生成优化缓存，全是它在背后做。装完新包行为诡异、文档打不开，先跑一遍 `raco setup`，很多问题当场消失。
+`raco setup` 是最容易被忽视、又最常救你命的一个：编译新装的包、重建文档索引、检查依赖一致性、生成优化缓存，全是它在背后做。先检查实际 Racket 版本、包安装范围、依赖和错误日志。确有编译或文档问题时，可针对包运行 raco setup --pkgs 包名，不必每次重建所有包。
 
 ## 包、应用、工具：一个项目的三张面孔
 
@@ -58,19 +58,35 @@ raco exe main.rkt
 
 这三样不是三种项目，而是同一个包的三张面孔：一个项目完全可以既被 `require`，又能直接运行，还顺手给 `raco` 贡献一个子命令。理解了这一点，你就明白为什么 Racket 敢把工程侧收进一个工具——它管的从来不只是"库"，而是你项目的一生。
 
+![从源码、测试到发行目录的工程流程](/images/racket-engineering-workflow.svg)
+
 ## 把 raco 用起来
 
-日常开发的三段工作流：
+先在一个空目录创建 main.rkt：
+
+```racket
+#lang racket/base
+(define (double n) (* 2 n))
+(module+ main (displayln (double 21)))
+(module+ test
+  (require rackunit)
+  (check-equal? (double 21) 42))
+```
+
+这个单文件程序不需要先安装为包。确认本机具有 rackunit-lib，再执行以下工作流：
 
 ```bash
-# 开发阶段
-raco pkg install --link .
-
 # 测试阶段
-raco test
+raco test main.rkt
 
-# 发布阶段
+# 编译检查
+raco make main.rkt
+
+# 发布阶段（按目标平台执行）
 raco exe main.rkt
+raco distribute dist main
 ```
+
+Windows 使用 `raco exe -o main.exe main.rkt` 和 `raco distribute dist main.exe`。在分发目录中确认实际入口路径并运行，预期打印 42。不要只复制入口文件或把当前平台生成的二进制文件当成跨平台产物。下一章再建立可链接安装的包。
 
 之后每次遇到新的工程需求——文档生成、部署、格式检查——先别急着找第三方工具，先问一句 `raco` 有没有现成的子命令。这个习惯会让你在 Racket 生态里事半功倍。

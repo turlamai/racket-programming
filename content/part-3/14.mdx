@@ -2,9 +2,9 @@
 
 > 递归不是 Racket 对循环的妥协，而是处理列表和树的自然方式——数据是递归的形状，处理就跟着是递归的形状。
 
-你写过 for 循环、遍历过数组，习惯用「变量变化 + 条件判断」控制流程。到了 Racket，处理一串数据时，递归往往比循环更直接——不是 Racket 没有循环（`for/fold`、`for/list` 都在），而是列表和树本身就是递归结构。一个列表要么是空、要么是一个元素挂在更短的列表前面；一棵树要么是叶子、要么是一个节点挂着几棵子树。**数据的形状决定了处理的形状**——顺着形状拆，递归就是最短的路径。
+想象要数清一排书：可以一本一本数，也可以先数第一本，再把剩下的书交给同一个计数方法。在 Racket 中，处理一串数据时，递归往往比循环更直接——不是 Racket 没有循环（`for/fold`、`for/list` 都在），而是列表和树本身就是递归结构。一个列表要么是空、要么是一个元素挂在更短的列表前面；一棵树要么是叶子、要么是一个节点挂着几棵子树。**数据的形状决定了处理的形状**——顺着形状拆，递归就是最短的路径。
 
-这篇讲 Racket 里怎么用递归处理列表和树，以及怎么让它跑得跟循环一样快。
+本章介绍结构递归、树遍历及尾调用，并区分时间复杂度与控制空间。
 
 ## 递归跟着数据的形状走
 
@@ -16,7 +16,7 @@
 
 递归之所以成立，是因为数据本身就有层级。Racket 的列表天然是递归结构——空列表是基础，非空列表是「一个元素 + 一个更短的列表」，用递归处理它几乎是本能。
 
-一个递归函数永远有两个分支：基例（base case）回答最简单的情况，递归（recursive case）把问题缩小一步再交还给自己。计算列表长度就是这么一件事：
+下面这种结构递归通常包含两类情况：基例（base case）回答最简单的情况，递归（recursive case）把问题缩小一步再交还给自己。计算列表长度就是这么一件事：
 
 ```racket
 (define (length-of lst)
@@ -39,10 +39,9 @@
 (define (my-filter pred lst)
  (cond [(empty? lst) '()]
  [else
- (define rest-filtered (my-filter pred (rest lst))) ; 先处理剩余部分
- (if (pred (first lst)) ; 再决定首元素留不留
- (cons (first lst) rest-filtered)
- rest-filtered)]))
+ (if (pred (first lst))
+ (cons (first lst) (my-filter pred (rest lst)))
+ (my-filter pred (rest lst)))]))
 
 (my-filter odd? '(1 2 3 4 5))
 ;; '(1 3 5)
@@ -54,7 +53,7 @@
 
 列表是线性的，递归只有一条路走到底。树才是递归真正闪光的地方——每个节点有任意多个子节点，循环要维护显式栈或队列，递归则直接交给调用栈。
 
-定义一棵多叉树，求所有节点值的和：
+定义一棵多叉树，求所有节点值的和。for/sum 依次把 child 绑定到子节点列表的元素，并累加每次循环的结果；空列表的和为 0：
 
 ```racket
 (struct node (value children)) ; struct 自动生成 node-value、node-children 访问器
@@ -74,13 +73,13 @@
 
 每个节点的和，等于当前值加上所有子节点的和。`for/sum` 把「遍历子节点并累加」压成一行，结构天然适合递归展开——你不需要自己管栈或队列。
 
-![racket-tree-recursion-shape](/images/racket-tree-recursion-shape.svg)
+![树形递归求和：叶子返回自身的值，父节点合并子树结果](/images/racket-tree-recursion-shape.svg)
 
 ## 尾递归：把递归跑成循环
 
-回头看前面的 `length-of`：`(else (+ 1 (length-of (rest lst))))`——递归调用包在 `+1` 里，得等它返回才能做加法。这种「递归回来还要做事」的位置不是尾位置，每一层调用都占一帧栈，列表一长就可能溢出。
+回头看前面的 `length-of`：`(else (+ 1 (length-of (rest lst))))`——递归调用包在 `+1` 里，得等它返回才能做加法。这种「递归回来还要做事」的位置不是尾位置，每一层都需要保留尚未完成的加法，因此待完成的计算会随列表长度增长，占用额外空间。
 
-Racket 保证尾调用（proper tail calls）：递归调用若处在函数的尾位置——也就是整个分支的最后一步、后面不再有任何计算——Racket 就不为它分配新栈帧，而是复用当前这一帧。**尾位置上的递归，不消耗额外栈空间，跑起来跟循环一样。**
+Racket 保证尾调用（proper tail calls）：递归调用若处在函数的尾位置——也就是整个分支的最后一步、后面不再有任何计算——Racket 保证尾调用不会使尚待返回的控制上下文不断增长。**尾递归可以在常量控制空间内反复执行，但这不等于程序总内存或执行时间都是常量。**
 
 把「递归回来还要做的计算」提前做好，塞进一个累加器（accumulator）带下去，递归调用就挪到了尾位置。求和的尾递归版：
 
@@ -93,16 +92,18 @@ Racket 保证尾调用（proper tail calls）：递归调用若处在函数的�
 ;; 15
 ```
 
-每一步把当前元素加进 `acc`，然后直接尾调用到剩余列表——没有「回来再算」的步骤。对一万个元素的列表，这版只占常量栈空间。
+每一步把当前元素加进 `acc`，然后直接尾调用到剩余列表——没有「回来再算」的步骤。无论列表有多少元素，这个版本所需的递归控制空间都不会随长度线性增长。
 
 尾递归的套路就一句话：**把「递归回来还要做的计算」提前算好，塞进累加器带下去，让递归调用成为最后一步。** 它常用于累计计算、状态不断更新的算法，以及任何需要避免栈溢出的深度递归。
 
 ## 递归也能造结构
 
-前面的例子都在「消耗」数据——读一个列表、算出一个数。递归还能反过来「生产」结构。构造一个从 n 倒数到 1 的列表：
+前面的例子都在「消耗」数据——读一个列表、算出一个数。递归还能反过来「生产」结构。构造一个从 n 倒数到 1 的列表。这里要求 n 是非负精确整数，否则递减不一定能够到达零：
 
 ```racket
 (define (countdown n)
+ (unless (exact-nonnegative-integer? n)
+   (raise-argument-error 'countdown "exact-nonnegative-integer?" n))
  (cond [(zero? n) '()]
  [else (cons n (countdown (sub1 n)))])) ; 把当前 n 挂到更小问题的结果前
 
@@ -115,15 +116,15 @@ Racket 保证尾调用（proper tail calls）：递归调用若处在函数的�
 把嵌套列表拍平，则是「边消耗边生产」的典型：
 
 ```racket
-(define (flatten lst)
+(define (flatten-list lst)
  (cond [(empty? lst) '()]
  [(list? (first lst))
- (append (flatten (first lst)) ; 首元素是列表，递归拍平后拼到前面
- (flatten (rest lst)))]
+ (append (flatten-list (first lst)) ; 首元素是列表，递归拍平后拼到前面
+ (flatten-list (rest lst)))]
  [else (cons (first lst) ; 首元素是原子，挂到剩余结果前
- (flatten (rest lst)))]))
+ (flatten-list (rest lst)))]))
 
-(flatten '((1 2) 3 ((4))))
+(flatten-list '((1 2) 3 ((4))))
 ;; '(1 2 3 4)
 ```
 
@@ -171,6 +172,36 @@ Racket 保证尾调用（proper tail calls）：递归调用若处在函数的�
   (cond [(zero? n) 0]
         [else (+ n (sum-1-to-n (sub1 n)))]))
 ```
+
+第二题假定 n 是非负精确整数。第一题每层 append 都要遍历其第一个列表，导致总工作量为 O(n²)；第二题执行 O(n) 次递归，但需要保留待完成的加法。
+
+### 参考答案
+
+```racket
+#lang racket
+(require rackunit)
+
+(define (reverse-tail lst)
+  (let loop ([remaining lst] [acc '()])
+    (if (null? remaining)
+        acc
+        (loop (cdr remaining)
+              (cons (car remaining) acc)))))
+
+(define (sum-tail n)
+  (unless (exact-nonnegative-integer? n)
+    (raise-argument-error 'sum-tail "exact-nonnegative-integer?" n))
+  (let loop ([k n] [acc 0])
+    (if (zero? k) acc (loop (sub1 k) (+ acc k)))))
+
+(check-equal? (reverse-tail '(1 2 3)) '(3 2 1))
+(check-equal? (reverse-tail '()) '())
+(check-equal? (sum-tail 5) 15)
+(check-equal? (sum-tail 0) 0)
+(check-exn exn:fail:contract? (lambda () (sum-tail -1)))
+```
+
+命名 let 是第 16 章将详细讲解的局部递归写法。保存为 recursion-test.rkt，执行 `raco test recursion-test.rkt`。五项检查均应通过。反转版本只需线性次数的 cons，但仍要为输出列表分配空间；求和版本的整数运算成本也取决于数值大小。
 
 改完想一想：你改后的两个版本，都多带了一个累加器。它替原来的递归干了一件什么事？为什么带上了它，递归就能「跑成循环」、不再一层层占着栈？
 > 把列表看成「首元素加剩余」，把树看成「节点加子树」，把整个计算看成「问题一步步缩到基例」——递归就不再是玄学。

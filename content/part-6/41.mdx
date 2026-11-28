@@ -2,11 +2,11 @@
 
 > SQL、CSS、正则、HTML，都是为某个领域量身定做的小语言。如果有一天你想要的那个小语言没人替你做，你能不能自己造一个？Racket 说能——而且不用从零写解析器。
 
-你已经用过不少“小语言”了：用 SQL 查数据，用 CSS 描述样式，用正则匹配文本，用 Makefile 编排构建。它们都是 DSL（domain-specific language，领域特定语言）——不图通用，只为某一类问题存在，所以在自己的地盘里比任何通用语言都顺手。
+先想象一个只接受几种指令的绘图工具：移动到某个位置、画线、换颜色。这些指令只服务于绘图任务。数据库查询、网页样式等领域也有类似的小语言。它们都是 DSL（domain-specific language，领域特定语言）——不图通用，只为某一类问题存在，所以在自己的地盘里比任何通用语言都顺手。
 
 你也多半动过“自己造一个”的念头：项目的配置文件越来越长，某种查询长得像一门语言却又不是，模板代码越写越重复。可一旦真要动手，多数语言会把你推向同一条路——写词法分析器、写语法解析器、搭一棵抽象语法树，等于先实现半个编译器。
 
-Racket 的不同之处在于，这些底层活儿它替你做完了。这篇接着系列宏那篇往下讲：宏给你改写语法的能力，而 DSL 是这个能力最值得的去处。
+Racket 的不同之处在于，它提供了可复用的读取器与宏系统，仍需要设计领域语法与语义。这篇接着系列宏那篇往下讲：宏给你改写语法的能力，而 DSL 是这个能力最值得的去处。
 
 ## 什么是 DSL
 
@@ -25,7 +25,7 @@ DSL 是“为某一类问题量身定做”的语言，和 C、Python、Java 这
 
 什么时候你会需要一个 DSL？当你发现自己在一个通用语言里反复写同样形状的代码——配置对象、查询构造、UI 描述——那往往是一个还没被取名的 DSL 在敲你的门。
 
-## 代码即数据，解析器是免费的
+## 复用读取器，而不是省略语法检查
 
 在大多数语言里，源代码是一串文本，把它变成能执行的东西要走一条长长的单行道：
 
@@ -35,22 +35,22 @@ DSL 是“为某一类问题量身定做”的语言，和 C、Python、Java 这
 
 Racket 不一样。它的源代码本身就是 S-表达式——一种树形数据结构。
 
-**你写的代码，和你用 `read` 读进来的数据，是同一棵树。** 这叫同象性（homoiconicity）。`read` 能把一段文本直接解析成 Racket 的列表：
+**许多 Racket 代码的外部表示可以由 read 读成普通数据。** 实际宏展开使用带作用域信息的语法对象。 这与同像性（homoiconicity）。`read` 能把一段文本直接解析成 Racket 的列表：
 
 ```racket
 (read (open-input-string "(move 10 20)"))
 ;; '(move 10 20)
 ```
 
-这意味着造语言的第一步——把文本解析成树——Racket 已经替你做完了。想自己跑数据，可以用 `eval`；它需要一个命名空间，`make-base-namespace` 给你一个带基础库的空环境。这条路能走，但写一个显式的解释函数通常更清楚，也更安全。下面我们就这么干。
+使用标准 S 表达式读取规则时，Racket 可以完成文本到数据的读取；领域命令的结构与参数合法性仍需要自己检查。eval 可以在指定命名空间求值可信代码，但不应执行不可信输入。这条路能走，但写一个显式的解释函数通常更清楚，也更安全。下面我们就这么干。
 
 Racket 把“语言怎么工作”拆成三层，每一层都是你能换的零件：
 
 | 层 | 干什么 | 你能定制什么 |
 |---|---|---|
-| Reader（读取层） | 文本 → S-表达式 | 换 `#lang` 就换 reader |
+| Reader（读取层） | 文本 → 模块语法对象 | 换 `#lang` 就换 reader |
 | Expander（展开层） | 跑宏、改写语法 | `define-syntax` 在这里工作 |
-| Runtime（运行层） | 真正执行代码 | 命名空间、`provide` 和 `require` |
+| Runtime（运行层） | 真正执行代码 | 运行时函数、值与效果 |
 
 文件开头的 `#lang racket` 就是在选 reader 和一整套语言。换成 `#lang scribble/base`，同一套机制跑的是文档标记语言；换成 `#lang typed/racket`，展开阶段就多了一道类型检查。
 
@@ -74,7 +74,7 @@ Racket 把“语言怎么工作”拆成三层，每一层都是你能换的零�
 
 注意最前面的 `'`——这一整个东西，在 Racket 眼里不是“代码”，而是一个嵌套列表，一棵树。`draw` 是根，里面挂着一串命令，每条命令又是 `(命令 参数 …)` 的列表。
 
-![racket-dsl-fig01](/images/racket-dsl-fig01.svg)
+![MiniDraw 命令树、解释器与输出的关系](/images/racket-dsl-fig01.svg)
 
 这棵命令树，就是这门语言的全部源代码。
 
@@ -88,11 +88,11 @@ Racket 把“语言怎么工作”拆成三层，每一层都是你能换的零�
 ; 解释单条命令
 (define (eval-command cmd)
  (match cmd
- [(list 'set-color color)
+ [(list 'set-color (? symbol? color))
  (printf "Set color to ~a\n" color)]
- [(list 'move x y)
+ [(list 'move (? real? x) (? real? y))
  (printf "Move to (~a, ~a)\n" x y)]
- [(list 'line-to x y)
+ [(list 'line-to (? real? x) (? real? y))
  (printf "Line to (~a, ~a)\n" x y)]
  [else
  (error 'eval-command "unknown command: ~a" cmd)]))
@@ -132,23 +132,23 @@ Set color to blue
 Line to (10, 50)
 ```
 
-到这里结论很朴素：**一个 DSL 的内核就是两样东西，一种数据格式，加一个解释它的函数。** 没有 lexer，没有 parser，没有 AST 要搭——Racket 的列表就是 AST。
+到这里结论很朴素：**一个 DSL 的内核就是两样东西，一种数据格式，加一个解释它的函数。** 这里复用 Racket 的读取器，并直接解释列表形式的命令树。若设计不同的文本语法，仍需要相应的解析器。
 
 ## 让语言长出新的词
 
-加功能，等于在 `match` 里加一条规则。比如 `(repeat n 命令 …)`，把里面的命令重复 n 次：
+加功能，等于在 `match` 里加一条规则。比如 `(repeat n 命令 …)`，把里面的命令重复 n 次。将下面定义替换之前的 eval-command：
 
 ```racket
 (define (eval-command cmd)
  (match cmd
- [(list 'set-color color)
+ [(list 'set-color (? symbol? color))
  (printf "Set color to ~a\n" color)]
- [(list 'move x y)
+ [(list 'move (? real? x) (? real? y))
  (printf "Move to (~a, ~a)\n" x y)]
- [(list 'line-to x y)
+ [(list 'line-to (? real? x) (? real? y))
  (printf "Line to (~a, ~a)\n" x y)]
  ; 新增：把 body 里的命令重复 n 次
- [(list 'repeat n body ...)
+ [(list 'repeat (? exact-nonnegative-integer? n) body ...)
  (for ([_ (in-range n)])
  (for-each eval-command body))]
  [else
@@ -194,7 +194,7 @@ Line to (10, 50)
 
 没有 `'`，没有 `eval-draw`——一眼就是一门语言。
 
-`define-syntax-rule` 只能写一种写法。要处理多种写法，就用它的完整形式 `define-syntax` 配 `syntax-rules`，在下面排多条 `[模式 模板]`：
+`define-syntax-rule` 表达一条模式规则。要处理多种写法，可以替换前面的 draw 宏定义，使用 `define-syntax` 配 `syntax-rules`，在下面排多条 `[模式 模板]`：
 
 ```racket
 (define-syntax draw
@@ -240,7 +240,10 @@ JSON 够通用了，但它有两个短板：不支持注释，语法锁死在花
  (define h (make-hash))
  (for ([p pairs])
  (match p
- [(list key val) (hash-set! h key (eval-json val))]
+ [(list (? symbol? key) val)
+  (when (hash-has-key? h key)
+    (error 'eval-json "duplicate key: ~a" key))
+  (hash-set! h key (eval-json val))]
  [else (error 'eval-json "bad pair: ~a" p)]))
  h]
  ; array → list
@@ -263,24 +266,26 @@ JSON 够通用了，但它有两个短板：不支持注释，语法锁死在花
 ;; '#hash((name . "Alice") (age . 30) (skills . ("Lisp" "Racket" "C")) (active . #t))
 ```
 
-因为是 S-表达式，你想往里加什么都容易。留几道练习。加注释，添一条规则把 `(comment ...)` 直接吞掉：
+因为是 S-表达式，你想往里加什么都容易。留几道练习。Racket reader 本身支持分号注释。如果想增加显式 comment 命令，还需在对象或数组层过滤它，不能把 void 当作 JSON 值：
 
 ```racket
-[(list 'comment _ ...) (void)]
+;; 在处理 pairs 或 elems 前过滤注释形式
+(define (comment-form? v)
+ (and (pair? v) (eq? (car v) 'comment)))
 ```
 
 加计算字段，让 DSL 里能算术：
 
 ```racket
-[(list '+ nums ...) (apply + nums)]
+[(list '+ nums ...) (apply + (map eval-json nums))]
 ; 用法：(total (+ 10 20 30))
 ```
 
-加多行字符串、加变量引用、加 include 其他文件，都是再加一条 `match` 规则的事。等写到这儿，你会发现自己造的 JSON 已经比原版好用了。同样的 recipe——数据、解释器、需要时配宏——可以套到下一个领域：构建规则、UI 布局、测试用例、查询语句。
+扩展变量与文件包含还需要设计作用域、路径、循环引用与资源限制。这里构造的是类似 JSON 的数据，不是完整 JSON 解析器；若要交换数据，应使用标准 json 库生成和验证 JSON。同样的 recipe——数据、解释器、需要时配宏——可以套到下一个领域：构建规则、UI 布局、测试用例、查询语句。
 
 ## 该不该造 DSL
 
-DSL 不是越多越好。判断标准很简单：**同一种形状的代码写了第三遍，就该把它抽成一门小语言了。**
+DSL 不是越多越好。判断标准很简单：重复出现的领域规则值得考虑抽象，但普通函数、数据结构或宏可能已经足够，不必立即创建语言。
 
 写一遍是普通代码，写两遍是巧合，写三遍是 DSL 在敲你的门。反过来，只出现一两次的“领域”硬造一门语言，反而增加阅读负担——DSL 是给反复出现的问题省力气，不是炫技。
 
@@ -288,7 +293,7 @@ DSL 不是越多越好。判断标准很简单：**同一种形状的代码写�
 
 ## 找问题，再改对
 
-这一章造的 JSON DSL，`eval-json` 的最后一条规则是 `[_ expr]`——任何没匹配上的东西都原样放行。先跑跑看它会放过什么：
+这一章造的 JSON 风格 DSL，`eval-json` 的最后一条规则是 `[_ expr]`——任何没匹配上的东西都原样放行。先跑跑看它会放过什么：
 
 ```racket
 (eval-json
@@ -297,6 +302,34 @@ DSL 不是越多越好。判断标准很简单：**同一种形状的代码写�
 ```
 
 数据错了不吭声，比报错更危险——坏掉的结构会一路流到程序的另一头才炸。把兜底改成白名单：数字、字符串、布尔原样返回，符号和其他未知形式，老老实实报错。
+
+### 参考答案
+
+将原 eval-json 的最后一个分支替换为以下规则：
+
+```racket
+[(? string? v) v]
+[(? boolean? v) v]
+[(? (lambda (v) (or (exact-integer? v)
+                      (and (flonum? v) (not (nan? v)) (not (infinite? v))))) v) v]
+['null 'null]
+[_ (error 'eval-json "unsupported value: ~s" expr)]
+```
+
+这里只接受 JSON 常用的字符串、布尔、有限浮点数、精确整数和约定的 null 符号。精确分数、复数、无穷和 NaN 不在这个小语言的数值范围内。将以下代码追加到包含修订版 eval-json 的模块：
+
+```racket
+(module+ test
+  (require rackunit json)
+  (define result (eval-json '(json (object (name "Ada") (active #t)))))
+  (check-equal? (hash-ref result 'name) "Ada")
+  (check-true (jsexpr? result))
+  (check-exn exn:fail? (lambda () (eval-json '(json (objekt (name "Ada"))))))
+  (check-exn exn:fail? (lambda () (eval-json '(object (name "A") (name "B")))))
+  (check-exn exn:fail? (lambda () (eval-json '(object (age 1/3))))))
+```
+
+保存为 json-dsl.rkt，执行 raco test json-dsl.rkt，预期五项检查通过。此练习未实现完整 JSON 语法、资源限制或所有可选扩展。
 
 改完想一想：解释器的兜底规则，该选「宽容放行」还是「fail-fast」？放行的代价由谁付？
 > 通用语言关心怎么做，DSL 只说要什么。在 Racket 里造一个，不用写解析器——你设计数据，写一个解释函数，需要时配一个宏，它就是一门语言了。

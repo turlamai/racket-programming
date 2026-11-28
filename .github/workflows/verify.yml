@@ -30,14 +30,14 @@ jobs:
       - name: Install site dependencies
         run: npm ci
 
-      - name: Audit npm dependencies
-        run: npm audit --audit-level=low
-
       - name: Check content metadata and links
         run: npm run check:content
 
       - name: Parse every Racket code block
         run: npm run check:racket
+
+      - name: Execute selected textbook regression examples
+        run: node scripts/check-book-examples.js
 
       - name: Run Web examples smoke test
         run: racket tests/web-smoke.rkt
@@ -50,3 +50,7 @@ jobs:
 
       - name: Build static site
         run: npm run build
+
+      - name: Audit npm dependencies
+        if: always()
+        run: npm audit --audit-level=low

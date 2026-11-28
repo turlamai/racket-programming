@@ -1,6 +1,6 @@
 # 模式匹配——用形状拆解数据
 
-> `match` 让你按数据的“形状”做判断：一次匹配同时完成“是不是这种结构”和“把里面的部件取出来”两件事。它是 `cond` 的进化版——`cond` 只比值的相等，`match` 能比形状。
+> `match` 让你按数据的“形状”做判断：一次匹配同时完成“是不是这种结构”和“把里面的部件取出来”两件事。cond 可以执行任意条件判断；match 则特别适合结构匹配与绑定。
 
 你拆过嵌套的列表吗？用 `car`、`cdr` 一层一层剥，代码很快糊成一堆括号；用 `cond` 判断“是不是三元素列表”，判断完了还得再 `cadr`、`caddr` 把元素取出来。判断一次、提取一次，同一份结构被你描述了两遍。
 
@@ -8,18 +8,18 @@
 
 ## 先看清 `match` 的骨架
 
-判断一个值是不是 3，`cond` 这么写：
+先用数值 3 演示判断，再尝试换成 4，`cond` 这么写：
 
 ```racket
 (cond
- [(equal? x 3) 'yes]
+ [(equal? 3 3) 'yes]
  [else 'no])
 ```
 
 `match` 这么写：
 
 ```racket
-(match x
+(match 3
  [3 'yes]
  [_ 'no])
 ```
@@ -28,7 +28,7 @@
 
 ## 三个最朴素的模式
 
-所有复杂模式，都由字面量、变量、通配符这三种原子搭起来。
+先认识三种基本模式：字面量、变量、通配符。
 
 字面量匹配一个具体的值——数字、字符串、布尔、字符都行：
 
@@ -46,7 +46,9 @@
  [x x]) ;; 42，x 被绑到 42
 ```
 
-通配符 `_` 同样匹配任何值，但不绑定——你只关心“匹配上了”，不关心值是什么。在 `cond` 里你写 `else` 兜底，在 `match` 里 `else` 只是个普通变量名，兜底要用 `_`。
+通配符 `_` 同样匹配任何值，但不绑定——你只关心“匹配上了”，不关心值是什么。在 `cond` 里你写 `else` 兜底，在 match 中推荐使用 _ 兜底，避免将 else 误认为 cond 中的专用分支。
+
+![模式匹配同时检查列表形状并绑定字段](/images/racket-match-destructure.svg)
 
 ## 按形状拆开列表
 
@@ -76,9 +78,9 @@
  [(cons head tail) (list head tail)]) ;; '(1 2)
 ```
 
-`cons` 匹配任意点对，`head` 绑 car，`tail` 绑 cdr。递归处理链表时，`(cons head tail)` 是最自然的写法——`tail` 还是个列表，接着往下剥。
+`cons` 匹配任意点对，`head` 绑 car，`tail` 绑 cdr。递归处理链表时，`(cons head tail)` 是最自然的写法——如果输入是非空正规列表，tail 仍是正规列表；一般点对的 cdr 不一定是列表。
 
-## 按字段名拆开结构体
+## 按字段位置拆开结构体
 
 自定义结构体用 `struct` 定义，匹配时直接按字段位置命名：
 
@@ -112,11 +114,11 @@
  [(? exact-integer? n) (* n 2)]) ;; 84
 ```
 
-`(? exact-integer? n)` 的意思：值满足 `exact-integer?`，就把它绑到 `n`。谓词可以是任何单参数函数，包括你自己写的 `lambda`：
+`(? exact-integer? n)` 的意思：值满足 `exact-integer?`，就把它绑到 `n`。谓词可以是接受一个参数的过程，包括自己写的 lambda。匹配器可能重复调用谓词或变换过程，因此应避免依赖调用次数或副作用：
 
 ```racket
 (match 5
- [(? (λ (x) (< x 10)) small) (format "~a 太小了" small)])
+ [(? (λ (x) (and (real? x) (< x 10))) small) (format "~a 太小了" small)])
 ;; "5 太小了"
 ```
 
@@ -144,10 +146,11 @@
 
 ```racket
 (match '(a b c)
- [(app length 3) 'three-elements]) ;; 'three-elements
+ [(and (? list?) (app length 3)) 'three-elements]
+ [_ 'other]) ;; 'three-elements
 ```
 
-`app` 让你能“先变换、再判断”，任何函数都能塞进模式里。`not` 是它们的反面，匹配“不是这种形状”的值，不绑定任何变量：
+`app` 让你能“先变换、再判断”，传入的过程需要接受匹配值，并返回与后续模式数量相符的结果；应确保它能安全处理输入。`not` 是它们的反面，匹配“不是这种形状”的值，不绑定任何变量：
 
 ```racket
 (match "hi"
@@ -185,18 +188,19 @@ b ;; 2
 
 注意那层双括号——`define/match` 的每个分支对应一组参数模式，所以 `(list a b c)` 外面还要包一层。
 
-**只要数据有固定形状，就别再手动 `car` `cdr`——`match-define` 直接拆开。**
+数据形状固定且不匹配属于错误时，可以使用 match-define；如果需要处理多种输入形状，应使用 match 并提供适当的失败分支。
 
 ## 实战：拆解一门小语言
 
-模式匹配的杀手锏，是处理 S-表达式这类“数据即程序”的结构。写一个只能做加减乘除的表达式求值器，整个核心就这几行：
+模式匹配的杀手锏，是处理 S-表达式这类“数据即程序”的结构。写一个只支持二元加法、乘法和数字的表达式求值器，整个核心就这几行：
 
 ```racket
 (define (eval-expr expr)
  (match expr
  [(list '+ a b) (+ (eval-expr a) (eval-expr b))]
  [(list '* a b) (* (eval-expr a) (eval-expr b))]
- [(? number? n) n]))
+ [(? number? n) n]
+ [_ (error 'eval-expr "unsupported expression: ~a" expr)]))
 
 (eval-expr '(+ 1 (* 2 3))) ;; 7
 ```
@@ -211,9 +215,9 @@ b ;; 2
 
 ```racket
 (define (handle-result r)
-  (cond [(and (pair? r) (eq? (car r) 'ok))
+  (cond [(and (list? r) (= (length r) 2) (eq? (car r) 'ok))
          (format "成功：~a" (cadr r))]
-        [(and (pair? r) (eq? (car r) 'error))
+        [(and (list? r) (= (length r) 2) (eq? (car r) 'error))
          (format "失败：~a" (cadr r))]
         [else "未知"]))
 ```
@@ -226,6 +230,34 @@ b ;; 2
 (define (show-user u)
   (string-append (user-name u) " <" (user-email u) ">"))
 ```
+
+### 参考答案
+
+```racket
+#lang racket
+(require rackunit)
+
+(define (handle-result r)
+  (match r
+    [(list 'ok value) (format "成功：~a" value)]
+    [(list 'error reason) (format "失败：~a" reason)]
+    [_ "未知"]))
+
+(struct user (name email) #:transparent)
+(define (show-user u)
+  (match u
+    [(user name email)
+     (string-append name " <" email ">")]))
+
+(check-equal? (handle-result '(ok 42)) "成功：42")
+(check-equal? (handle-result '(error timeout)) "失败：timeout")
+(check-equal? (handle-result '(ok)) "未知")
+(check-equal? (handle-result 42) "未知")
+(check-equal? (show-user (user "Ada" "ada@example.com"))
+              "Ada <ada@example.com>")
+```
+
+保存为 match-test.rkt，执行 `raco test match-test.rkt`，预期五项检查通过。第二题原代码并没有显式判断形状，而是依赖访问器的类型检查；改为 match 后，字段对应关系更加集中。这个示例假设 user 的两个字段都是字符串。
 
 改完想一想：原代码里，「判断它是什么形状」和「把里面的东西取出来」是分两步做的。改用 `match` 后，这两步合成了几步？
 > 模式匹配让你用数据的形状说话：画出一个模式，判断与提取一次完成。一旦习惯了按形状思考，`car`/`cdr` 和嵌套 `cond` 的噪音就从代码里消失。
