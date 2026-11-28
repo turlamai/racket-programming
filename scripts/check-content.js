@@ -115,10 +115,14 @@ function walk(dir) {
   return out;
 }
 
+const imageRoot = path.join(ROOT, 'public', 'images');
+const referencedImages = new Set();
+
 for (const file of walk(CONTENT)) {
   const text = fs.readFileSync(file, 'utf8');
   for (const m of text.matchAll(/!\[([^\]\n]*)\]\(\/images\/([^\s)]+)\)/g)) {
-    const asset = path.resolve(ROOT, 'public', 'images', m[2]);
+    referencedImages.add(m[2]);
+    const asset = path.resolve(imageRoot, m[2]);
     if (!asset.startsWith(path.join(ROOT, 'public', 'images') + path.sep) ||
         !fs.existsSync(asset) || !fs.statSync(asset).isFile()) {
       fail(`${path.relative(ROOT, file)}: missing image /images/${m[2]}`);
@@ -131,6 +135,17 @@ for (const file of walk(CONTENT)) {
       fail(`${path.relative(ROOT, file)}: broken internal chapter link ${route}`);
     }
   }
+}
+
+const imageFiles = fs.readdirSync(imageRoot, { withFileTypes: true })
+  .filter(entry => entry.isFile() && /\.(svg|png|jpe?g|webp|gif)$/i.test(entry.name))
+  .map(entry => entry.name);
+const unreferenced = imageFiles.filter(name => !referencedImages.has(name));
+console.log('[content-check] images: ' + imageFiles.length + ' assets, ' +
+  referencedImages.size + ' distinct Markdown image references');
+for (const name of unreferenced) {
+  // Report separately; an asset may still be referenced by MDX or site code.
+  console.warn('[content-check] no Markdown image reference: ' + name);
 }
 
 if (!process.exitCode) {
